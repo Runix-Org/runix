@@ -15,18 +15,17 @@ const (
 )
 
 type Value[T any] struct {
-	mu     sync.Mutex
-	st     atomic.Uint32
-	val    T
-	name   string
-	initFn func() (T, error)
+	mu   sync.Mutex
+	st   atomic.Uint32
+	val  *T
+	name string
 }
 
-func New[T any](name string, initFn func() (T, error)) *Value[T] {
-	return &Value[T]{name: name, initFn: initFn}
+func New[T any](name string) *Value[T] {
+	return &Value[T]{name: name}
 }
 
-func (v *Value[T]) Init() (err error) {
+func (v *Value[T]) Init(initFn func() (*T, error)) (err error) {
 	if state(v.st.Load()) != stNew {
 		panic(fmt.Sprintf("double init of module %s", v.name))
 	}
@@ -45,7 +44,7 @@ func (v *Value[T]) Init() (err error) {
 		}
 	}()
 
-	val, err := v.initFn()
+	val, err := initFn()
 	if err != nil {
 		v.st.Store(uint32(stFailed))
 		return err
@@ -57,7 +56,7 @@ func (v *Value[T]) Init() (err error) {
 	return nil
 }
 
-func (v *Value[T]) Get() T {
+func (v *Value[T]) Get() *T {
 	switch state(v.st.Load()) {
 	case stOK:
 		return v.val
