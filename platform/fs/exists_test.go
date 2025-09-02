@@ -9,7 +9,7 @@ import (
 	"gotest.tools/v3/fs"
 )
 
-type ExistsTestSuite struct {
+type ExistsSuite struct {
 	suite.Suite
 	tempDir *fs.Dir
 
@@ -27,7 +27,7 @@ type ExistsTestSuite struct {
 	absEmptyDir        string
 }
 
-func (s *ExistsTestSuite) SetupSuite() {
+func (s *ExistsSuite) SetupSuite() {
 	// Create temporary directory structure
 	s.tempDir = fs.NewDir(s.T(), "exists_test",
 		fs.WithFile("regular_file", "content"),
@@ -57,18 +57,18 @@ func (s *ExistsTestSuite) SetupSuite() {
 	s.absEmptyDir, _ = filepath.Abs(s.emptyDir)
 }
 
-func (s *ExistsTestSuite) TearDownSuite() {
+func (s *ExistsSuite) TearDownSuite() {
 	s.tempDir.Remove()
 }
 
-func (s *ExistsTestSuite) assertAll(path string, expectedExists, expectedDir, expectedFile, expectedSymlink bool) {
+func (s *ExistsSuite) assertAll(path string, expectedExists, expectedDir, expectedFile, expectedSymlink bool) {
 	assert.Equal(s.T(), expectedExists, Exists(path), "Exists should return %v for %s", expectedExists, path)
 	assert.Equal(s.T(), expectedDir, ExistsDir(path), "ExistsDir should return %v for %s", expectedDir, path)
 	assert.Equal(s.T(), expectedFile, ExistsFile(path), "ExistsFile should return %v for %s", expectedFile, path)
 	assert.Equal(s.T(), expectedSymlink, ExistsSymlink(path), "ExistsSymlink should return %v for %s", expectedSymlink, path)
 }
 
-func (s *ExistsTestSuite) TestFiles() {
+func (s *ExistsSuite) TestFiles() {
 	// Regular file
 	s.assertAll(s.regularFile, true, false, true, false)
 	s.assertAll(s.absRegularFile, true, false, true, false)
@@ -77,7 +77,7 @@ func (s *ExistsTestSuite) TestFiles() {
 	s.assertAll(s.fileWithExt, true, false, true, false)
 }
 
-func (s *ExistsTestSuite) TestDirectories() {
+func (s *ExistsSuite) TestDirectories() {
 	// Empty directory
 	s.assertAll(s.emptyDir, true, true, false, false)
 	s.assertAll(s.absEmptyDir, true, true, false, false)
@@ -87,7 +87,7 @@ func (s *ExistsTestSuite) TestDirectories() {
 	s.assertAll(nonEmptyDir, true, true, false, false)
 }
 
-func (s *ExistsTestSuite) TestSymlinks() {
+func (s *ExistsSuite) TestSymlinks() {
 	// Symlink to file
 	s.assertAll(s.symlinkToFile, true, false, true, true)
 
@@ -104,7 +104,7 @@ func (s *ExistsTestSuite) TestSymlinks() {
 	s.assertAll(s.brokenSymlinkToSym, false, false, false, true)
 }
 
-func (s *ExistsTestSuite) TestNonExistent() {
+func (s *ExistsSuite) TestNonExistent() {
 	s.assertAll(s.nonExistent, false, false, false, false)
 
 	// Another nonexistent
@@ -113,5 +113,5 @@ func (s *ExistsTestSuite) TestNonExistent() {
 }
 
 func TestExistsTestSuite(t *testing.T) {
-	suite.Run(t, new(ExistsTestSuite))
+	suite.Run(t, new(ExistsSuite))
 }
