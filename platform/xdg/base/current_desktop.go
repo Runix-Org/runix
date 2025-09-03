@@ -2,18 +2,18 @@ package base
 
 import (
 	"errors"
+	"os"
 	"strings"
-	"syscall"
 )
 
 func GetCurrentDesktops() map[string]struct{} {
 	return baseCacheVar.Get().currentDesktops
 }
 
-func getCurrentDesktopsImpl() (map[string]struct{}, error) {
+func getCurrentDesktopsImpl(cache *baseCache) error {
 	des := make(map[string]struct{})
 
-	if s, ok := syscall.Getenv("XDG_CURRENT_DESKTOP"); ok {
+	if s := os.Getenv("XDG_CURRENT_DESKTOP"); s != "" {
 		for _, p := range strings.Split(s, ":") {
 			p = strings.TrimSpace(p)
 			if p != "" {
@@ -22,21 +22,24 @@ func getCurrentDesktopsImpl() (map[string]struct{}, error) {
 		}
 
 		if len(des) != 0 {
-			return des, nil
+			cache.currentDesktops = des
+			return nil
 		}
 	}
 
 	// fallback
-	if s, ok := syscall.Getenv("DESKTOP_SESSION"); ok && s != "" {
+	if s := os.Getenv("DESKTOP_SESSION"); s != "" {
 		des[s] = struct{}{}
-		return des, nil
+		cache.currentDesktops = des
+		return nil
 	}
 
 	// fallback
-	if s, ok := syscall.Getenv("GDMSESSION"); ok && s != "" {
+	if s := os.Getenv("GDMSESSION"); s != "" {
 		des[s] = struct{}{}
-		return des, nil
+		cache.currentDesktops = des
+		return nil
 	}
 
-	return des, errors.New("not found current DE names")
+	return errors.New("not found current desktop names")
 }
