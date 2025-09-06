@@ -16,6 +16,8 @@ type baseCache struct {
 
 	// fillIconSearchDirs
 	iconSearchDirs []string
+	// fillDesktopSearchDirs
+	desktopSearchDirs []string
 
 	// fillXDGAppPaths
 	appDataDir   string

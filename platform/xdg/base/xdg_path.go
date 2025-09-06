@@ -44,6 +44,10 @@ func GetIconSearchDirs() []string {
 	return baseCacheVar.Get().iconSearchDirs
 }
 
+func GetDesktopSearchDirs() []string {
+	return baseCacheVar.Get().desktopSearchDirs
+}
+
 func GetAppDataDir() string {
 	return baseCacheVar.Get().appDataDir
 }
@@ -107,6 +111,10 @@ func fillXDGPaths(cache *baseCache, appName string) error {
 		return nil
 	}
 
+	if err := fillDesktopSearchDirs(cache); err != nil {
+		return nil
+	}
+
 	if err := fillXDGAppPaths(cache, appName); err != nil {
 		return nil
 	}
@@ -136,6 +144,18 @@ func fillIconSearchDirs(cache *baseCache) error {
 		}
 
 		cache.iconSearchDirs = append(cache.iconSearchDirs, dirPath)
+	}
+
+	return nil
+}
+
+func fillDesktopSearchDirs(cache *baseCache) error {
+	cache.desktopSearchDirs = []string{}
+	for _, dataDir := range cache.allDataDirs {
+		dirPath := filepath.Join(dataDir, "applications")
+		if fs.ExistsDir(dirPath) {
+			cache.desktopSearchDirs = append(cache.desktopSearchDirs, dirPath)
+		}
 	}
 
 	return nil
