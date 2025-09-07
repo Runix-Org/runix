@@ -12,11 +12,10 @@ import (
 	"go.uber.org/zap"
 )
 
-const groupDesktopEntry = "Desktop Entry"
-
 var (
 	ErrInvalid               = errors.New("invalid keyfile format")
 	ErrBadEscapeSequence     = errors.New("bad escape sequence")
+	ErrRequiredKeyNotFound   = errors.New("required key not found")
 	ErrUnexpectedEndOfString = errors.New("unexpected end of string")
 )
 
@@ -52,11 +51,6 @@ func NewDesktopEntryReader(filePath string, logger *zap.Logger) (*DesktopEntryRe
 	}, true
 }
 
-func (r *DesktopEntryReader) KeyExists(key string) bool {
-	_, exists := r.kf[groupDesktopEntry][key]
-	return exists
-}
-
 func (r *DesktopEntryReader) Bool(group string, key string) (bool, bool) {
 	value, exists := r.kf[group][key]
 	if !exists {
@@ -68,16 +62,17 @@ func (r *DesktopEntryReader) Bool(group string, key string) (bool, bool) {
 		return result, true
 	}
 
-	r.LogParseError(group, key, err)
+	r.logParseError(group, key, err)
 	return false, false
 }
 
-func (r *DesktopEntryReader) BoolDE(key string) (bool, bool) {
-	return r.Bool(groupDesktopEntry, key)
-}
-
-func (r *DesktopEntryReader) String(group string, key string) (string, bool) {
+func (r *DesktopEntryReader) String(group string, key string, isRequired bool) (string, bool) {
 	value, exists := r.kf[group][key]
+	if isRequired && (!exists || value == "") {
+		r.logParseError(group, key, ErrRequiredKeyNotFound)
+		return "", false
+	}
+
 	if !exists {
 		return "", true
 	}
@@ -87,26 +82,23 @@ func (r *DesktopEntryReader) String(group string, key string) (string, bool) {
 		return result, true
 	}
 
-	r.LogParseError(group, key, err)
+	r.logParseError(group, key, err)
 	return "", false
 }
 
-func (r *DesktopEntryReader) StringDE(key string) (string, bool) {
-	return r.String(groupDesktopEntry, key)
-}
-
-func (r *DesktopEntryReader) LocaleString(group string, key string, l Locale) (string, bool) {
-	result, err := r.localeString(group, key, l)
-	if err == nil {
-		return result, true
+func (r *DesktopEntryReader) LocaleString(group string, key string, l Locale, isRequired bool) (string, bool) {
+	result, exists, err := r.localeString(group, key, l)
+	if err != nil {
+		r.logLocaleParseError(group, key, l, err)
+		return "", false
 	}
 
-	r.LogLocaleParseError(group, key, l, err)
-	return "", false
-}
+	if isRequired && (!exists || result == "") {
+		r.logParseError(group, key, ErrRequiredKeyNotFound)
+		return "", false
+	}
 
-func (r *DesktopEntryReader) LocaleStringDE(key string, l Locale) (string, bool) {
-	return r.LocaleString(groupDesktopEntry, key, l)
+	return result, true
 }
 
 func (r *DesktopEntryReader) StringList(group string, key string) ([]string, bool) {
@@ -120,12 +112,8 @@ func (r *DesktopEntryReader) StringList(group string, key string) ([]string, boo
 		return result, true
 	}
 
-	r.LogParseError(group, key, err)
+	r.logParseError(group, key, err)
 	return nil, false
-}
-
-func (r *DesktopEntryReader) StringListDE(key string) ([]string, bool) {
-	return r.StringList(groupDesktopEntry, key)
 }
 
 func (r *DesktopEntryReader) LocaleStringList(group string, key string, l Locale) ([]string, bool) {
@@ -134,15 +122,11 @@ func (r *DesktopEntryReader) LocaleStringList(group string, key string, l Locale
 		return result, true
 	}
 
-	r.LogLocaleParseError(group, key, l, err)
+	r.logLocaleParseError(group, key, l, err)
 	return nil, false
 }
 
-func (r *DesktopEntryReader) LocaleStringListDE(key string, l Locale) ([]string, bool) {
-	return r.LocaleStringList(groupDesktopEntry, key, l)
-}
-
-func (r *DesktopEntryReader) LogParseError(group string, key string, err error) {
+func (r *DesktopEntryReader) logParseError(group string, key string, err error) {
 	r.logger.Info("Failed parse desktop entry file field",
 		zap.String("path", r.filePath),
 		zap.String("group", group),
@@ -150,7 +134,7 @@ func (r *DesktopEntryReader) LogParseError(group string, key string, err error) 
 		zap.Error(err))
 }
 
-func (r *DesktopEntryReader) LogLocaleParseError(group string, key string, l Locale, err error) {
+func (r *DesktopEntryReader) logLocaleParseError(group string, key string, l Locale, err error) {
 	r.logger.Info("Failed parse desktop entry file field",
 		zap.String("path", r.filePath),
 		zap.String("group", group),
@@ -159,19 +143,21 @@ func (r *DesktopEntryReader) LogLocaleParseError(group string, key string, l Loc
 		zap.Error(err))
 }
 
-func (r *DesktopEntryReader) localeString(group string, key string, l Locale) (string, error) {
+func (r *DesktopEntryReader) localeString(group string, key string, l Locale) (string, bool, error) {
 	for _, locale := range l.Variants() {
 		lKey := fmt.Sprintf("%v[%v]", key, locale)
 		if lVal, exists := r.kf[group][lKey]; exists {
-			return unescapeString(lVal)
+			result, err := unescapeString(lVal)
+			return result, true, err
 		}
 	}
 
 	if val, exists := r.kf[group][key]; exists {
-		return unescapeString(val)
+		result, err := unescapeString(val)
+		return result, true, err
 	}
 
-	return "", nil
+	return "", false, nil
 }
 
 func (r *DesktopEntryReader) localeStringList(group string, key string, l Locale) ([]string, error) {
