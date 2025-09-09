@@ -5,6 +5,8 @@ import (
 	"go.uber.org/zap"
 )
 
+const EntryTypeApplication = "Application"
+
 var terminalCategories = map[string]struct{}{
 	"Application": {},
 	"ConsoleOnly": {},
@@ -35,6 +37,12 @@ type DesktopEntry struct {
 	// Icon to display in file manager, menus, etc.
 	Icon string
 
+	// Specifying if D-Bus activation is supported for this application
+	DBusActivatable bool
+
+	// Path to an executable file on disk used to determine if the program is actually installed
+	TryExec string
+
 	// Program to execute
 	Exec string
 
@@ -50,6 +58,16 @@ type DesktopEntry struct {
 	// A list of strings which may be used in addition to other metadata to describe this entry
 	// Array by locale
 	Keywords [][]string
+
+	// If true, it is KNOWN that the application will send a "remove" message when started
+	// with the DESKTOP_STARTUP_ID environment variable set.
+	// If false, it is KNOWN that the application does not work with startup notification at all
+	// (does not shown any window, breaks even when using StartupWMClass, etc.)
+	StartupNotify bool
+
+	// If specified, it is known that the application will map at least one window with the given
+	// string as its WM class or WM name hint
+	StartupWMClass string
 }
 
 func NewDesktopEntry(
@@ -88,7 +106,7 @@ func (de *DesktopEntry) parse(
 ) bool {
 	var ok bool
 
-	if de.EntryType, ok = parser.EntryType(); !ok || de.EntryType != "Application" {
+	if de.EntryType, ok = parser.EntryType(); !ok || de.EntryType != EntryTypeApplication {
 		return false
 	}
 
@@ -156,47 +174,68 @@ func (de *DesktopEntry) parse(
 		}
 	}
 
-	if de.Exec, ok = parser.Exec(); !ok {
+	if de.DBusActivatable, ok = parser.DBusActivatable(); !ok {
 		return false
 	}
 
-	if de.Path, ok = parser.Path(); !ok {
-		return false
-	}
+	if de.EntryType == EntryTypeApplication {
+		if de.TryExec, ok = parser.TryExec(); !ok {
+			return false
+		}
 
-	if de.Terminal, ok = parser.Terminal(); !ok {
-		return false
-	}
+		if de.Exec, ok = parser.Exec(); !ok {
+			return false
+		}
 
-	if mimeType, ok := parser.MimeType(); !ok {
-		return false
-	} else {
-		mimeStorage.addDesktopFile(mimeType, de)
-	}
+		if de.Path, ok = parser.Path(); !ok {
+			return false
+		}
 
-	if de.Categories, ok = parser.Categories(); !ok {
-		return false
-	} else if de.Terminal {
-		found := false
-		for _, item := range de.Categories {
-			if _, found = terminalCategories[item]; found {
-				break
+		if de.Terminal, ok = parser.Terminal(); !ok {
+			return false
+		}
+
+		if mimeType, ok := parser.MimeType(); !ok {
+			return false
+		} else {
+			mimeStorage.addDesktopFile(mimeType, de)
+		}
+
+		if de.Categories, ok = parser.Categories(); !ok {
+			return false
+		} else if de.Terminal {
+			found := false
+			for _, item := range de.Categories {
+				if _, found = terminalCategories[item]; found {
+					break
+				}
+			}
+
+			if !found {
+				// Skip inconsistent desktop file
+				return false
 			}
 		}
 
-		if !found {
-			// Skip inconsistent desktop file
-			return false
+		de.Keywords = make([][]string, 0, len(locales))
+		for _, l := range locales {
+			if keywords, ok := parser.Keywords(l); !ok {
+				return false
+			} else if len(keywords) != 0 {
+				de.Keywords = append(de.Keywords, keywords)
+			}
 		}
-	}
 
-	de.Keywords = make([][]string, 0, len(locales))
-	for _, l := range locales {
-		if keywords, ok := parser.Keywords(l); !ok {
+		if de.StartupNotify, ok = parser.StartupNotify(); !ok {
 			return false
-		} else if len(keywords) != 0 {
-			de.Keywords = append(de.Keywords, keywords)
 		}
+
+		if de.StartupWMClass, ok = parser.StartupWMClass(); !ok {
+			return false
+		}
+	} else {
+		de.Categories = []string{}
+		de.Keywords = [][]string{}
 	}
 
 	return true

@@ -20,7 +20,7 @@ func NewDesktopEntryParser(filePath string, logger *zap.Logger) (*DesktopEntryPa
 	}, true
 }
 
-// TODO: Version, Comment, DBusActivatable, TryExec, Actions, Implements, StartupNotify, StartupWMClass, URL
+// TODO: Version, Comment, Actions, Implements, URL, PrefersNonDefaultGPU, SingleMainWindow
 
 func (p *DesktopEntryParser) EntryType() (string, bool) {
 	return p.rd.String(groupDesktopEntry, "Type", true)
@@ -54,6 +54,14 @@ func (p *DesktopEntryParser) NotShowIn() ([]string, bool) {
 	return p.rd.StringList(groupDesktopEntry, "NotShowIn")
 }
 
+func (p *DesktopEntryParser) DBusActivatable() (bool, bool) {
+	return p.rd.Bool(groupDesktopEntry, "DBusActivatable")
+}
+
+func (p *DesktopEntryParser) TryExec() (string, bool) {
+	return p.rd.String(groupDesktopEntry, "TryExec", false)
+}
+
 func (p *DesktopEntryParser) Exec() (string, bool) {
 	return p.rd.String(groupDesktopEntry, "Exec", false)
 }
@@ -76,4 +84,12 @@ func (p *DesktopEntryParser) Categories() ([]string, bool) {
 
 func (p *DesktopEntryParser) Keywords(l Locale) ([]string, bool) {
 	return p.rd.LocaleStringList(groupDesktopEntry, "Keywords", l)
+}
+
+func (p *DesktopEntryParser) StartupNotify() (bool, bool) {
+	return p.rd.Bool(groupDesktopEntry, "StartupNotify")
+}
+
+func (p *DesktopEntryParser) StartupWMClass() (string, bool) {
+	return p.rd.String(groupDesktopEntry, "StartupWMClass", false)
 }
