@@ -1,14 +1,23 @@
 package desktop
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/Runix-Org/runix/platform/fs"
+	"github.com/Runix-Org/runix/platform/wayland"
 )
+
+// A sufficiently unique ID
+func generateStartupID() string {
+	return fmt.Sprintf("runix-%d-%d", os.Getpid(), time.Now().UnixNano())
+}
 
 type DesktopEntryLauncher struct {
 	terminalPath string
@@ -126,7 +135,30 @@ func (l *DesktopEntryLauncher) buildLaunchArgs(exec string, urls []string, files
 	return res, nil
 }
 
+func (l *DesktopEntryLauncher) checkTryExec(tryExec string) error {
+	if tryExec == "" {
+		return nil
+	}
+
+	if strings.ContainsRune(tryExec, '/') {
+		if !fs.ExistsFile(tryExec) {
+			return fmt.Errorf("TryExec not found or not a file: %s", tryExec)
+		}
+
+		return nil
+	}
+
+	if _, err := exec.LookPath(tryExec); err != nil {
+		return fmt.Errorf("TryExec not found in PATH: %s", tryExec)
+	}
+	return nil
+}
+
 func (l *DesktopEntryLauncher) LaunchFull(de *DesktopEntry, urls []string, files []string) error {
+	if err := l.checkTryExec(de.TryExec); err != nil {
+		return err
+	}
+
 	args, err := l.buildLaunchArgs(de.Exec, urls, files)
 	if err != nil {
 		return err
@@ -147,19 +179,35 @@ func (l *DesktopEntryLauncher) LaunchFull(de *DesktopEntry, urls []string, files
 		cmd = exec.Command(name, args[1:]...)
 	}
 
-	// If the parent process does not exit correctly, then all child processes will also be killed
-	// This code cancel this behavior
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true, Pgid: 0}
+	env := os.Environ()
+	env = append(env, "BAMF_DESKTOP_FILE_HINT="+de.FilePath)
+	if de.StartupNotify {
+		env = append(env, "DESKTOP_STARTUP_ID="+generateStartupID())
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if token := wayland.GenerateActivationToken(ctx); token != "" {
+		env = append(env, "XDG_ACTIVATION_TOKEN="+token)
+	}
+
+	cmd.Env = env
 	cmd.Dir = de.Path
-	if cmd.Dir == "" {
-		cmd.Dir = fs.GetUserHome()
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		// If the parent process does not exit correctly, then all child processes will also be killed
+		// This code cancel this behavior
+		Setpgid: true,
+		// Detach fd 0 from controlling terminal
+		Noctty: true,
 	}
 
 	if err = cmd.Start(); err != nil {
 		return err
 	}
 
-	go cmd.Wait()
+	go func() {
+		_ = cmd.Wait()
+	}()
 
 	return nil
 }
