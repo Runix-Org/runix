@@ -29,7 +29,7 @@ func (s *DesktopEntryLauncherSuite) SetupTest() {
 func (s *DesktopEntryLauncherSuite) checkArgs(execStr string, expected []string) {
 	t := s.T()
 
-	launcher := NewDesktopEntryLauncher("")
+	launcher := NewDesktopEntryLauncher(nil, "")
 	actual, err := launcher.buildLaunchArgs(execStr, s.urls, s.files)
 	require.NoError(t, err)
 	require.Equal(t, expected, actual)

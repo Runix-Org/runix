@@ -1,7 +1,6 @@
 package desktop
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -11,7 +10,8 @@ import (
 	"time"
 
 	"github.com/Runix-Org/runix/platform/fs"
-	"github.com/Runix-Org/runix/platform/wayland"
+	"github.com/Runix-Org/runix/platform/wlx"
+	"go.uber.org/zap"
 )
 
 // A sufficiently unique ID
@@ -21,11 +21,13 @@ func generateStartupID() string {
 
 type DesktopEntryLauncher struct {
 	terminalPath string
+	logger       *zap.Logger
 }
 
-func NewDesktopEntryLauncher(terminalPath string) *DesktopEntryLauncher {
+func NewDesktopEntryLauncher(logger *zap.Logger, terminalPath string) *DesktopEntryLauncher {
 	return &DesktopEntryLauncher{
 		terminalPath: terminalPath,
+		logger:       logger,
 	}
 }
 
@@ -185,9 +187,7 @@ func (l *DesktopEntryLauncher) LaunchFull(de *DesktopEntry, urls []string, files
 		env = append(env, "DESKTOP_STARTUP_ID="+generateStartupID())
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	if token := wayland.GenerateActivationToken(ctx); token != "" {
+	if token := wlx.GenerateActivationToken(l.logger); token != "" {
 		env = append(env, "XDG_ACTIVATION_TOKEN="+token)
 	}
 
