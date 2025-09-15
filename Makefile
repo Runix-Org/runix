@@ -1,10 +1,13 @@
-.PHONY: build run ui-lint ui-lint-fix ui-format ui-postclone ui-build-debug ui-build-release ui-dev help
+.PHONY: build build_release run ui-lint ui-lint-fix ui-format ui-postclone ui-build-debug ui-build-release ui-dev help
 
-build: ## Build
-	@go build -ldflags "-s -w"
+build: ## Build dev version
+	@go build -ldflags "-s -w" -o ./runix
 
-run: build
-	@./runix
+build_release: ui-build-release ## Build release version
+	@go build -ldflags "-s -w" -o ./runix_release
+
+run: build ## Run dev version
+	@./runix --dev
 
 ui-lint: ## Lint frontend
 	@(cd frontend && npm run lint)
@@ -19,10 +22,10 @@ ui-postclone: ## Install frontend deps
 	@rm -rf ./frontend/node_modules
 	@(cd frontend && npm install)
 
-ui-build-debug: ## Build frontend for debug
+ui-build-debug: ## Build frontend debug version
 	@(cd frontend && npm run build:debug)
 
-ui-build-release: ## Build frontend for release
+ui-build-release: ## Build frontend release version
 	@(cd frontend && npm run build)
 
 ui-dev: ## Run frontend in dev mode
