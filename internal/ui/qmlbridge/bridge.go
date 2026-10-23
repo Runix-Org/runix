@@ -7,7 +7,9 @@ import (
 	"runtime"
 	"sync"
 
+	"runix/internal/ui/semanticdebug"
 	"runix/internal/ui/windowpolicy"
+	"runix/internal/uidebug"
 
 	qt "github.com/mappu/miqt/qt6"
 	"github.com/mappu/miqt/qt6/mainthread"
@@ -23,7 +25,10 @@ const (
 // Work must return promptly when its context is canceled and must not access Qt.
 // The embedded document owns the visual tree and consumes the bridge context model.
 // Hyprland sizing is opt-in and targets only this process's window.
-func Run(args []string, document []byte, work func(context.Context, string) string, hyprlandWindow bool) error {
+func Run(
+	args []string, document []byte, work func(context.Context, string) string,
+	hyprlandWindow bool, debugSocket string,
+) error {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 
@@ -57,11 +62,14 @@ func Run(args []string, document []byte, work func(context.Context, string) stri
 		}
 		return qt.NewQVariant()
 	})
+	rootIndex := qt.NewQModelIndex()
+	defer rootIndex.Delete()
 	publish := func(text string) {
 		status = text
-		index := model.CreateIndex(0, 0)
+		index := model.Index(0, 0, rootIndex)
+		runtime.SetFinalizer(index, nil)
 		defer index.Delete()
-		model.DataChanged(&index, &index)
+		model.DataChanged(index, index)
 	}
 	model.OnSetData(func(_ func(*qt.QModelIndex, *qt.QVariant, int) bool,
 		index *qt.QModelIndex, value *qt.QVariant, role int,
@@ -100,7 +108,9 @@ func Run(args []string, document []byte, work func(context.Context, string) stri
 
 	engine := qml.NewQQmlApplicationEngine()
 	engine.RootContext().SetContextProperty("bridge", model.QObject)
+	stopDebug := func() {}
 	defer func() {
+		stopDebug()
 		stop()
 		engine.Delete() // QML objects die before the context model.
 	}()
@@ -113,11 +123,30 @@ func Run(args []string, document []byte, work func(context.Context, string) stri
 	}
 	defer stopWindow()
 	app.OnAboutToQuit(stopWindow)
+	var debug *semanticdebug.Adapter
+	if debugSocket != "" {
+		debug, err = semanticdebug.Install(engine)
+		if err != nil {
+			return err
+		}
+		stopDebug = debug.Stop
+	}
 	url := qt.NewQUrl3("qrc:/runix/ui-lab/Main.qml")
 	defer url.Delete()
 	engine.LoadData2(document, url)
 	if len(engine.RootObjects()) == 0 {
 		return fmt.Errorf("load UI laboratory QML: no root object; see Qt errors above")
+	}
+	if debug != nil {
+		stopSocket, listenErr := uidebug.Listen(debugSocket, debug.Handle)
+		if listenErr != nil {
+			return listenErr
+		}
+		stopDebug = func() {
+			debug.Stop()
+			stopSocket()
+		}
+		app.OnAboutToQuit(func() { stopDebug() })
 	}
 	fmt.Printf("UI backend: %s\n", qt.QGuiApplication_PlatformName())
 	if code := qt.QApplication_Exec(); code != 0 {

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -55,11 +56,13 @@ func InstallHyprland(engine *qml.QQmlApplicationEngine, enabled bool) (func(), e
 		}
 		return qt.NewQVariant()
 	})
+	rootIndex := qt.NewQModelIndex()
 	publish := func(text string) {
 		status = text
-		index := model.CreateIndex(0, 0)
+		index := model.Index(0, 0, rootIndex)
+		runtime.SetFinalizer(index, nil)
 		defer index.Delete()
-		model.DataChanged(&index, &index)
+		model.DataChanged(index, index)
 	}
 	model.OnSetData(func(_ func(*qt.QModelIndex, *qt.QVariant, int) bool,
 		index *qt.QModelIndex, value *qt.QVariant, role int,
@@ -103,10 +106,14 @@ func InstallHyprland(engine *qml.QQmlApplicationEngine, enabled bool) (func(), e
 	}
 	engine.RootContext().SetContextProperty("windowCommands", model.QObject)
 	return func() {
+		if stopping {
+			return
+		}
 		stopping = true
 		cancel()
 		workers.Wait()
 		qt.QCoreApplication_SendPostedEvents2(nil, int(qt.QEvent__MetaCall))
+		rootIndex.Delete()
 	}, nil
 }
 

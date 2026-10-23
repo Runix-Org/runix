@@ -18,9 +18,10 @@ var document []byte
 
 func main() {
 	hyprlandWindow := flag.Bool("hyprland-window", false, "Use Hyprland IPC to apply this window's requested sizes")
+	debugSocket := flag.String("debug-socket", "", "Enable the development debug socket at this private path")
 	flag.Parse()
 	args := append([]string{os.Args[0]}, flag.Args()...)
-	if err := qmlbridge.Run(args, document, runQuery, *hyprlandWindow); err != nil {
+	if err := qmlbridge.Run(args, document, runQuery, *hyprlandWindow, *debugSocket); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}

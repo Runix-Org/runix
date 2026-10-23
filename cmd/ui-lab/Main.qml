@@ -6,7 +6,11 @@ ApplicationWindow {
     id: window
     visible: true
     flags: Qt.Window | Qt.FramelessWindowHint
-    Component.onCompleted: windowPolicy.attach(window)
+    Component.onCompleted: {
+        windowPolicy.attach(window)
+        if (typeof semanticDebug !== "undefined")
+            semanticDebug.window = window
+    }
     title: "runix UI laboratory"
 
     Shortcut {
@@ -96,9 +100,25 @@ ApplicationWindow {
                 delegate: ColumnLayout {
                     Layout.fillWidth: true
                     spacing: 12
+                    Component.onCompleted: {
+                        if (typeof semanticDebug === "undefined")
+                            return
+                        semanticDebug.registerControl("query", query, "textbox", "Query",
+                            ["focus", "replace", "select", "key"], null, false)
+                        semanticDebug.registerControl("status", status, "status", "Query status", [], null, false)
+                        semanticDebug.registerControl("run-query", runQuery, "button", "Run query",
+                            ["focus", "activate", "key"], function() { runQuery.clicked() }, false)
+                        semanticDebug.registerControl("quit", quit, "button", "Quit",
+                            ["focus", "activate", "key"], function() { quit.clicked() }, false)
+                        semanticDebug.registerControl("password-fixture", passwordFixture, "password", "Password fixture",
+                            [], null, true)
+                        semanticDebug.registerControl("disabled-fixture", disabledFixture, "button", "Disabled fixture",
+                            ["activate"], function() { disabledFixture.clicked() }, false)
+                    }
 
                     TextField {
                         id: query
+                        objectName: "query"
                         Layout.fillWidth: true
                         placeholderText: "Enter a query"
                         focus: true
@@ -106,18 +126,42 @@ ApplicationWindow {
                     }
 
                     Label {
+                        id: status
+                        objectName: "status"
                         Layout.fillWidth: true
                         text: model.status
                         textFormat: Text.PlainText
                         wrapMode: Text.Wrap
                     }
 
+                    TextField {
+                        id: passwordFixture
+                        objectName: "password-fixture"
+                        Layout.fillWidth: true
+                        visible: typeof semanticDebug !== "undefined"
+                        placeholderText: "Password fixture"
+                        text: "SEMANTIC_PASSWORD_SECRET"
+                        echoMode: TextInput.Password
+                    }
+
+                    Button {
+                        id: disabledFixture
+                        objectName: "disabled-fixture"
+                        text: "Disabled action fixture"
+                        enabled: false
+                        visible: typeof semanticDebug !== "undefined"
+                    }
+
                     RowLayout {
                         Button {
+                            id: runQuery
+                            objectName: "run-query"
                             text: "Run query"
                             onClicked: model.command = query.text
                         }
                         Button {
+                            id: quit
+                            objectName: "quit"
                             text: "Quit"
                             onClicked: window.close()
                         }
