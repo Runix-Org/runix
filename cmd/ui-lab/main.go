@@ -4,6 +4,7 @@ package main
 import (
 	"context"
 	_ "embed"
+	"flag"
 	"fmt"
 	"os"
 	"strings"
@@ -16,7 +17,10 @@ import (
 var document []byte
 
 func main() {
-	if err := qmlbridge.Run(os.Args, document, runQuery); err != nil {
+	hyprlandWindow := flag.Bool("hyprland-window", false, "Use Hyprland IPC to apply this window's requested sizes")
+	flag.Parse()
+	args := append([]string{os.Args[0]}, flag.Args()...)
+	if err := qmlbridge.Run(args, document, runQuery, *hyprlandWindow); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}

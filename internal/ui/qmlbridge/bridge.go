@@ -7,6 +7,8 @@ import (
 	"runtime"
 	"sync"
 
+	"runix/internal/ui/windowpolicy"
+
 	qt "github.com/mappu/miqt/qt6"
 	"github.com/mappu/miqt/qt6/mainthread"
 	"github.com/mappu/miqt/qt6/qml"
@@ -20,7 +22,8 @@ const (
 // Run owns the GUI thread until the last window closes. Call once from main.
 // Work must return promptly when its context is canceled and must not access Qt.
 // The embedded document owns the visual tree and consumes the bridge context model.
-func Run(args []string, document []byte, work func(context.Context, string) string) error {
+// Hyprland sizing is opt-in and targets only this process's window.
+func Run(args []string, document []byte, work func(context.Context, string) string, hyprlandWindow bool) error {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 
@@ -101,6 +104,15 @@ func Run(args []string, document []byte, work func(context.Context, string) stri
 		stop()
 		engine.Delete() // QML objects die before the context model.
 	}()
+	if err := windowpolicy.Install(engine); err != nil {
+		return err
+	}
+	stopWindow, err := windowpolicy.InstallHyprland(engine, hyprlandWindow)
+	if err != nil {
+		return err
+	}
+	defer stopWindow()
+	app.OnAboutToQuit(stopWindow)
 	url := qt.NewQUrl3("qrc:/runix/ui-lab/Main.qml")
 	defer url.Delete()
 	engine.LoadData2(document, url)
