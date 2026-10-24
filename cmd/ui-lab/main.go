@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -17,14 +18,36 @@ import (
 var document []byte
 
 func main() {
-	hyprlandWindow := flag.Bool("hyprland-window", false, "Use Hyprland IPC to apply this window's requested sizes")
-	debugSocket := flag.String("debug-socket", "", "Enable the development debug socket at this private path")
-	flag.Parse()
-	args := append([]string{os.Args[0]}, flag.Args()...)
-	if err := qmlbridge.Run(args, document, runQuery, *hyprlandWindow, *debugSocket); err != nil {
+	if err := run(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+}
+
+func run() error {
+	hyprlandWindow := flag.Bool("hyprland-window", false, "Use Hyprland IPC for window sizing, placement, and focus")
+	debugSocket := flag.String("debug-socket", "", "Enable the development debug socket at this private path")
+	activationSocket := flag.String("activation-socket", "",
+		"Use this private activation path; default: a new temporary directory")
+	startHidden := flag.Bool("start-hidden", false, "Start hidden and wait for activation")
+	flag.Parse()
+	if *activationSocket == "" {
+		directory, err := os.MkdirTemp("", "runix-activation.")
+		if err != nil {
+			return fmt.Errorf("create activation directory: %w", err)
+		}
+		defer func() { _ = os.Remove(directory) }()
+		*activationSocket = filepath.Join(directory, "ui.sock")
+	}
+	fmt.Printf("Activation socket: %s\n", *activationSocket)
+	args := append([]string{os.Args[0]}, flag.Args()...)
+	options := qmlbridge.Options{
+		HyprlandWindow:   *hyprlandWindow,
+		DebugSocket:      *debugSocket,
+		ActivationSocket: *activationSocket,
+		StartHidden:      *startHidden,
+	}
+	return qmlbridge.Run(args, document, runQuery, options)
 }
 
 // The delay is a deterministic laboratory fixture, not adapter behavior.

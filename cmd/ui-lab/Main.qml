@@ -4,24 +4,41 @@ import QtQuick.Layouts
 
 ApplicationWindow {
     id: window
-    visible: true
+    visible: !launcherStartHidden
     flags: Qt.Window | Qt.FramelessWindowHint
     Component.onCompleted: {
         windowPolicy.attach(window)
-        if (typeof semanticDebug !== "undefined")
+        launcher.window = window
+        if (typeof semanticDebug !== "undefined") {
             semanticDebug.window = window
+            semanticDebug.dismiss = function() { window.requestVisibility("hide") }
+        }
     }
     title: "runix UI laboratory"
+    onClosing: Qt.quit()
+
+    function requestVisibility(command) {
+        visibilityCommand.item.request(command)
+    }
+
+    Repeater {
+        id: visibilityCommand
+        model: launcherCommands
+        delegate: Item {
+            function request(command) { model.command = command }
+        }
+        property var item: count > 0 ? itemAt(0) : null
+    }
 
     Shortcut {
         sequence: "Escape"
-        onActivated: window.close()
+        onActivated: window.requestVisibility("hide")
     }
 
     Timer {
         id: showAgain
         interval: 1000
-        onTriggered: window.show()
+        onTriggered: window.requestVisibility("show")
     }
 
     ScrollView {
@@ -72,7 +89,7 @@ ApplicationWindow {
                 Button {
                     text: "Hide for 1 second"
                     onClicked: {
-                        window.hide()
+                        window.requestVisibility("hide")
                         showAgain.start()
                     }
                 }
@@ -101,6 +118,7 @@ ApplicationWindow {
                     Layout.fillWidth: true
                     spacing: 12
                     Component.onCompleted: {
+                        launcher.query = query
                         if (typeof semanticDebug === "undefined")
                             return
                         semanticDebug.registerControl("query", query, "textbox", "Query",
@@ -122,6 +140,11 @@ ApplicationWindow {
                         Layout.fillWidth: true
                         placeholderText: "Enter a query"
                         focus: true
+                        onActiveFocusChanged: {
+                            if (activeFocus)
+                                viewport.contentItem.contentY = Math.max(0, Math.min(
+                                    viewport.contentHeight - viewport.availableHeight, query.mapToItem(content, 0, 0).y))
+                        }
                         onAccepted: model.command = text
                     }
 
@@ -163,7 +186,7 @@ ApplicationWindow {
                             id: quit
                             objectName: "quit"
                             text: "Quit"
-                            onClicked: window.close()
+                            onClicked: Qt.quit()
                         }
                     }
                 }

@@ -3,6 +3,7 @@ import QtQuick
 QtObject {
     id: registry
     property var window: null
+    property var dismiss: null
     property var controls: ({})
 
     function registerControl(id, item, role, label, actions, activate, secret) {
@@ -102,7 +103,9 @@ QtObject {
                 item.nextItemInFocusChain(request.text === "Tab").forceActiveFocus(Qt.TabFocusReason)
                 break
             case "Escape":
-                window.close()
+                if (typeof dismiss !== "function")
+                    return fail("unsupported_key", "The window has no dismiss handler")
+                dismiss()
                 break
             default:
                 return fail("unsupported_key", "This keyboard action is not supported")

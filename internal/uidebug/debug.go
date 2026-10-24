@@ -10,11 +10,10 @@ import (
 	"io"
 	"net"
 	"os"
-	"path/filepath"
 	"regexp"
-	"sync"
-	"syscall"
 	"time"
+
+	"runix/internal/localipc"
 )
 
 const (
@@ -49,81 +48,16 @@ type (
 var idPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
 
 func Listen(path string, handler Handler) (func(), error) {
-	if handler == nil || path == "" || !filepath.IsAbs(path) {
+	if handler == nil {
 		return nil, errors.New("debug socket requires an absolute path and handler")
 	}
-	parent := filepath.Dir(path)
-	st, err := os.Lstat(parent)
-	if err != nil || !st.IsDir() || st.Mode()&os.ModeSymlink != 0 || st.Mode().Perm() != 0o700 {
-		return nil, errors.New("debug socket directory must be a private 0700 directory")
-	}
-	stat, ok := st.Sys().(*syscall.Stat_t)
-	if !ok || int(stat.Uid) != os.Getuid() {
-		return nil, errors.New("debug socket directory must be owned by this user")
-	}
-	if _, err = os.Lstat(path); err == nil {
-		return nil, errors.New("debug socket path already exists")
-	} else if !os.IsNotExist(err) {
-		return nil, errors.New("cannot inspect debug socket path")
-	}
-	listener, err := (&net.ListenConfig{}).Listen(context.Background(), "unix", path)
+	serveStop, err := localipc.Listen(path, func(ctx context.Context, conn net.Conn) {
+		serve(ctx, conn, handler)
+	})
 	if err != nil {
 		return nil, errors.New("cannot create debug socket")
 	}
-	if unixListener, ok := listener.(*net.UnixListener); ok {
-		unixListener.SetUnlinkOnClose(false)
-	}
-	created, err := os.Lstat(path)
-	if err != nil || created.Mode()&os.ModeSocket == 0 {
-		_ = listener.Close()
-		return nil, errors.New("debug socket was not created safely")
-	}
-	if err = os.Chmod(path, 0o600); err != nil {
-		_ = listener.Close()
-		removeOwned(path, created)
-		return nil, errors.New("cannot secure debug socket")
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	var workers sync.WaitGroup
-	slots := make(chan struct{}, 4)
-	var stopOnce sync.Once
-	stop := func() {
-		stopOnce.Do(func() {
-			cancel()
-			_ = listener.Close()
-			workers.Wait()
-			removeOwned(path, created)
-		})
-	}
-	workers.Add(1)
-	go func() {
-		defer workers.Done()
-		for {
-			conn, acceptErr := listener.Accept()
-			if acceptErr != nil {
-				return
-			}
-			select {
-			case slots <- struct{}{}:
-				workers.Add(1)
-				go func() {
-					defer workers.Done()
-					defer func() { <-slots }()
-					serve(ctx, conn, handler)
-				}()
-			default:
-				_ = conn.Close()
-			}
-		}
-	}()
-	return stop, nil
-}
-
-func removeOwned(path string, created os.FileInfo) {
-	current, err := os.Lstat(path)
-	if err == nil && os.SameFile(created, current) {
-		_ = os.Remove(path)
-	}
+	return serveStop, nil
 }
 
 func serve(parent context.Context, conn net.Conn, handler Handler) {

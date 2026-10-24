@@ -1,0 +1,93 @@
+// Package localipc provides a private Unix-domain socket listener for local services.
+package localipc
+
+import (
+	"context"
+	"errors"
+	"net"
+	"os"
+	"path/filepath"
+	"sync"
+	"syscall"
+)
+
+// Listen creates a private Unix socket at path and serves up to four connections at once.
+// The returned function cancels handlers, closes the listener, joins workers, and removes
+// only the socket created by this call.
+func Listen(path string, serve func(context.Context, net.Conn)) (func(), error) {
+	if serve == nil || path == "" || !filepath.IsAbs(path) {
+		return nil, errors.New("local socket requires an absolute path and handler")
+	}
+	parent := filepath.Dir(path)
+	st, err := os.Lstat(parent)
+	if err != nil || !st.IsDir() || st.Mode()&os.ModeSymlink != 0 || st.Mode().Perm() != 0o700 {
+		return nil, errors.New("local socket directory must be a private 0700 directory")
+	}
+	stat, ok := st.Sys().(*syscall.Stat_t)
+	if !ok || int(stat.Uid) != os.Getuid() {
+		return nil, errors.New("local socket directory must be owned by this user")
+	}
+	if _, err = os.Lstat(path); err == nil {
+		return nil, errors.New("local socket path already exists")
+	} else if !os.IsNotExist(err) {
+		return nil, errors.New("cannot inspect local socket path")
+	}
+	listener, err := (&net.ListenConfig{}).Listen(context.Background(), "unix", path)
+	if err != nil {
+		return nil, errors.New("cannot create local socket")
+	}
+	if unixListener, ok := listener.(*net.UnixListener); ok {
+		unixListener.SetUnlinkOnClose(false)
+	}
+	created, err := os.Lstat(path)
+	if err != nil || created.Mode()&os.ModeSocket == 0 {
+		_ = listener.Close()
+		return nil, errors.New("local socket was not created safely")
+	}
+	if err = os.Chmod(path, 0o600); err != nil {
+		_ = listener.Close()
+		removeOwned(path, created)
+		return nil, errors.New("cannot secure local socket")
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	var workers sync.WaitGroup
+	slots := make(chan struct{}, 4)
+	var stopOnce sync.Once
+	stop := func() {
+		stopOnce.Do(func() {
+			cancel()
+			_ = listener.Close()
+			workers.Wait()
+			removeOwned(path, created)
+		})
+	}
+	workers.Add(1)
+	go func() {
+		defer workers.Done()
+		for {
+			conn, acceptErr := listener.Accept()
+			if acceptErr != nil {
+				return
+			}
+			select {
+			case slots <- struct{}{}:
+				workers.Add(1)
+				go func() {
+					defer workers.Done()
+					defer func() { <-slots }()
+					serve(ctx, conn)
+				}()
+			default:
+				_ = conn.Close()
+			}
+		}
+	}()
+	return stop, nil
+}
+
+func removeOwned(path string, created os.FileInfo) {
+	current, err := os.Lstat(path)
+	if err == nil && os.SameFile(created, current) {
+		_ = os.Remove(path)
+	}
+}

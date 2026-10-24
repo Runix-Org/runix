@@ -7,6 +7,8 @@ import (
 	"runtime"
 	"sync"
 
+	"runix/internal/activation"
+	"runix/internal/ui/launcher"
 	"runix/internal/ui/semanticdebug"
 	"runix/internal/ui/windowpolicy"
 	"runix/internal/uidebug"
@@ -21,19 +23,31 @@ const (
 	commandRole = statusRole + 1
 )
 
-// Run owns the GUI thread until the last window closes. Call once from main.
+// Options selects explicit laboratory integrations.
+type Options struct {
+	HyprlandWindow   bool
+	DebugSocket      string
+	ActivationSocket string
+	StartHidden      bool
+}
+
+// Run owns the GUI thread until explicit quit. Call once from main.
 // Work must return promptly when its context is canceled and must not access Qt.
 // The embedded document owns the visual tree and consumes the bridge context model.
 // Hyprland sizing is opt-in and targets only this process's window.
 func Run(
 	args []string, document []byte, work func(context.Context, string) string,
-	hyprlandWindow bool, debugSocket string,
+	options Options,
 ) error {
+	if options.StartHidden && options.ActivationSocket == "" {
+		return fmt.Errorf("start-hidden requires an activation socket")
+	}
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 
 	app := qt.NewQApplication(args)
 	defer app.Delete()
+	qt.QGuiApplication_SetQuitOnLastWindowClosed(false)
 	qt.QCoreApplication_SetApplicationName("runix-ui-lab")
 	qt.QGuiApplication_SetDesktopFileName("runix-ui-lab")
 
@@ -104,7 +118,6 @@ func Run(
 		// Release MIQT callback handles even if quit won the delivery race.
 		qt.QCoreApplication_SendPostedEvents2(nil, int(qt.QEvent__MetaCall))
 	}
-	app.OnAboutToQuit(stop)
 
 	engine := qml.NewQQmlApplicationEngine()
 	engine.RootContext().SetContextProperty("bridge", model.QObject)
@@ -117,14 +130,23 @@ func Run(
 	if err := windowpolicy.Install(engine); err != nil {
 		return err
 	}
-	stopWindow, err := windowpolicy.InstallHyprland(engine, hyprlandWindow)
+	stopWindow, err := windowpolicy.InstallHyprland(engine, options.HyprlandWindow)
 	if err != nil {
 		return err
 	}
 	defer stopWindow()
-	app.OnAboutToQuit(stopWindow)
+	lifecycle, err := launcher.Install(engine, options.HyprlandWindow, options.StartHidden)
+	if err != nil {
+		return err
+	}
+	stopActivationSocket := func() {}
+	stopActivation := func() {
+		lifecycle.Stop()
+		stopActivationSocket()
+	}
+	defer stopActivation()
 	var debug *semanticdebug.Adapter
-	if debugSocket != "" {
+	if options.DebugSocket != "" {
 		debug, err = semanticdebug.Install(engine)
 		if err != nil {
 			return err
@@ -137,8 +159,15 @@ func Run(
 	if len(engine.RootObjects()) == 0 {
 		return fmt.Errorf("load UI laboratory QML: no root object; see Qt errors above")
 	}
+	if options.ActivationSocket != "" {
+		stopSocket, listenErr := activation.Listen(options.ActivationSocket, lifecycle.Handle)
+		if listenErr != nil {
+			return listenErr
+		}
+		stopActivationSocket = stopSocket
+	}
 	if debug != nil {
-		stopSocket, listenErr := uidebug.Listen(debugSocket, debug.Handle)
+		stopSocket, listenErr := uidebug.Listen(options.DebugSocket, debug.Handle)
 		if listenErr != nil {
 			return listenErr
 		}
@@ -146,8 +175,18 @@ func Run(
 			debug.Stop()
 			stopSocket()
 		}
-		app.OnAboutToQuit(func() { stopDebug() })
 	}
+	app.OnAboutToQuit(func() {
+		stopping = true
+		cancel()
+		if debug != nil {
+			debug.Stop()
+		}
+		stopActivation()
+		stopDebug()
+		stopWindow()
+		stop()
+	})
 	fmt.Printf("UI backend: %s\n", qt.QGuiApplication_PlatformName())
 	if code := qt.QApplication_Exec(); code != 0 {
 		return fmt.Errorf("UI event loop exited with code %d", code)
