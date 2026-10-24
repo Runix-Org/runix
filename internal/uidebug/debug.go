@@ -124,9 +124,9 @@ func serve(parent context.Context, conn net.Conn, handler Handler) {
 
 func validAction(action, text string) bool {
 	switch action {
-	case "focus", "activate", "select":
+	case "focus", "activate":
 		return text == ""
-	case "replace":
+	case "replace", "select", "scroll":
 		return len(text) <= 4096
 	case "key":
 		switch text {

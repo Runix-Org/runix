@@ -2,15 +2,13 @@
 package main
 
 import (
-	"context"
 	_ "embed"
 	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
-	"time"
 
+	"runix/internal/search"
 	"runix/internal/ui/qmlbridge"
 )
 
@@ -46,18 +44,23 @@ func run() error {
 		DebugSocket:      *debugSocket,
 		ActivationSocket: *activationSocket,
 		StartHidden:      *startHidden,
+		Activate:         func(id string) { fmt.Printf("Activated record: %s\n", id) },
 	}
-	return qmlbridge.Run(args, document, runQuery, options)
+	return qmlbridge.Run(args, document, search.NewIndex(searchFixture()).Search, options)
 }
 
-// The delay is a deterministic laboratory fixture, not adapter behavior.
-func runQuery(ctx context.Context, query string) string {
-	timer := time.NewTimer(750 * time.Millisecond)
-	defer timer.Stop()
-	select {
-	case <-ctx.Done():
-		return "Canceled"
-	case <-timer.C:
-		return "Result: " + strings.ToUpper(query)
+// Deliberate title collisions exercise stable IDs and cross-field ranking.
+func searchFixture() []search.Record {
+	names := [...]string{"Atlas", "Bridge", "Console", "Delta", "Editor", "Files", "Graph", "Help"}
+	categories := [...]string{"Application", "Document", "Command", "Bookmark"}
+	records := make([]search.Record, 50_000)
+	for index := range records {
+		records[index] = search.Record{
+			ID:       fmt.Sprintf("record-%05d", index),
+			Title:    fmt.Sprintf("%s %03d", names[index%len(names)], index%100),
+			Subtitle: fmt.Sprintf("Workspace %02d project %03d", index%17, index%113),
+			Category: categories[(index/len(names))%len(categories)],
+		}
 	}
+	return records
 }

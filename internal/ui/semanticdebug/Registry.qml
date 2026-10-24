@@ -36,7 +36,7 @@ QtObject {
         }
         const visible = window.visible && item.visible && item.opacity > 0
         const inView = visible && right > left && bottom > top
-        return {id: id, role: entry.role, label: entry.label, visible: visible,
+        const description = {id: id, role: entry.role, label: entry.label, visible: visible,
                 enabled: item.enabled, focused: item.activeFocus,
                 value: entry.secret ? null : String(item.text === undefined ? "" : item.text),
                 redacted: entry.secret, actions: entry.actions, bounds: bounds,
@@ -44,6 +44,8 @@ QtObject {
                     || right < origin.x + item.width || bottom < origin.y + item.height,
                 visible_bounds: {x: left, y: top, width: Math.max(0, right-left),
                                  height: Math.max(0, bottom-top)}}
+        if (!entry.secret && entry.inspect) description.model = entry.inspect()
+        return description
     }
 
     function dispatch(request) {
@@ -79,7 +81,17 @@ QtObject {
             item.insert(0, request.text || "")
             break
         case "select":
-            item.selectAll()
+            if (entry.select) {
+                if (!entry.select(request.text || ""))
+                    return fail("invalid_selection", "Choose an available result index")
+            } else {
+                if (request.text) return fail("invalid_selection", "Text selection takes no argument")
+                item.selectAll()
+            }
+            break
+        case "scroll":
+            if (!entry.scroll || !entry.scroll(request.text || ""))
+                return fail("invalid_scroll", "Choose an available result index")
             break
         case "activate":
             entry.activate()

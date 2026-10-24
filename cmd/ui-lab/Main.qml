@@ -6,6 +6,8 @@ ApplicationWindow {
     id: window
     visible: !launcherStartHidden
     flags: Qt.Window | Qt.FramelessWindowHint
+    title: "runix UI laboratory"
+    onClosing: Qt.quit()
     Component.onCompleted: {
         windowPolicy.attach(window)
         launcher.window = window
@@ -14,189 +16,183 @@ ApplicationWindow {
             semanticDebug.dismiss = function() { window.requestVisibility("hide") }
         }
     }
-    title: "runix UI laboratory"
-    onClosing: Qt.quit()
-
-    function requestVisibility(command) {
-        visibilityCommand.item.request(command)
-    }
-
+    function requestVisibility(command) { visibilityCommand.itemAt(0).request(command) }
     Repeater {
         id: visibilityCommand
         model: launcherCommands
-        delegate: Item {
-            function request(command) { model.command = command }
-        }
-        property var item: count > 0 ? itemAt(0) : null
+        delegate: Item { function request(command) { model.command = command } }
     }
+    Shortcut { sequence: "Escape"; onActivated: window.requestVisibility("hide") }
+    Timer { id: showAgain; interval: 1000; onTriggered: window.requestVisibility("show") }
 
-    Shortcut {
-        sequence: "Escape"
-        onActivated: window.requestVisibility("hide")
-    }
-
-    Timer {
-        id: showAgain
-        interval: 1000
-        onTriggered: window.requestVisibility("show")
-    }
-
-    ScrollView {
-        id: viewport
+    ColumnLayout {
         anchors.fill: parent
-        anchors.margins: 24
-        clip: true
-        contentWidth: availableWidth
-        contentHeight: content.implicitHeight
-
-        ColumnLayout {
-            id: content
-            width: viewport.availableWidth
-            spacing: 12
-
+        anchors.margins: 16
+        spacing: 8
+        RowLayout {
             Label {
                 Layout.fillWidth: true
-                text: "Window policy — drag here"
-                font.pixelSize: 22
-                MouseArea {
-                    anchors.fill: parent
-                    onPressed: windowPolicy.startMove()
-                }
+                text: "Search · 50,000 records"
+                font.pixelSize: 20
+                MouseArea { anchors.fill: parent; onPressed: windowPolicy.startMove() }
             }
-
-            Label {
+            Button { text: "Window"; onClicked: geometry.open() }
+            Button {
+                id: quit
+                text: "Quit"
+                onClicked: Qt.quit()
+            }
+        }
+        Repeater {
+            model: searchState
+            delegate: ColumnLayout {
+                id: screen
                 Layout.fillWidth: true
-                text: "Requested: " + windowPolicy.requestedSize.width + " × " + windowPolicy.requestedSize.height
-                    + " | Constrained: " + windowPolicy.constrainedSize.width + " × " + windowPolicy.constrainedSize.height
-                    + "\nObserved (logical): " + window.width + " × " + window.height
-                    + " | Qt screen DPR: " + windowPolicy.scale + " | Output: " + window.Screen.name
-                    + "\nLimits: " + window.minimumWidth + " × " + window.minimumHeight
-                    + " — " + window.maximumWidth + " × " + window.maximumHeight
-                    + "\nAvailable (logical): " + windowPolicy.availableWidth + " × " + windowPolicy.availableHeight
-                    + "\nMove: " + windowPolicy.moveResult + "\nResize: " + windowPolicy.resizeResult
-                wrapMode: Text.Wrap
-            }
-
-            RowLayout {
-                Button {
-                    text: "Compact"
-                    onClicked: windowPolicy.expanded = false
+                Layout.fillHeight: true
+                readonly property var info: JSON.parse(model.snapshot)
+                function submit() { model.command = JSON.stringify({op: "query", text: query.text}) }
+                Component.onCompleted: {
+                    launcher.query = query
+                    if (typeof semanticDebug === "undefined") return
+                    semanticDebug.registerControl("query", query, "textbox", "Query",
+                        ["focus", "replace", "select", "key"], null, false)
+                    semanticDebug.registerControl("status", status, "status", "Search status", [], null, false)
+                    semanticDebug.registerControl("run-query", runQuery, "button", "Run query",
+                        ["focus", "activate", "key"], function() { runQuery.clicked() }, false)
+                    semanticDebug.registerControl("quit", quit, "button", "Quit",
+                        ["focus", "activate", "key"], function() { quit.clicked() }, false)
+                    semanticDebug.registerControl("password-fixture", passwordFixture, "password", "Password fixture",
+                        [], null, true)
+                    semanticDebug.registerControl("disabled-fixture", disabledFixture, "button", "Disabled fixture",
+                        ["activate"], function() { disabledFixture.clicked() }, false)
+                    semanticDebug.registerControl("results", results, "list", "Search results",
+                        ["focus", "select", "scroll", "activate"], function() { results.item.activate() }, false)
+                    semanticDebug.controls.results.inspect = function() { return results.item.inspect() }
+                    semanticDebug.controls.results.select = function(text) {
+                        if (!/^[0-9]+$/.test(text)) return false
+                        return results.item.select(Number(text))
+                    }
+                    semanticDebug.controls.results.scroll = function(text) {
+                        if (!/^[0-9]+$/.test(text)) return false
+                        const index = Number(text)
+                        if (index >= results.item.view.count) return false
+                        results.item.view.positionViewAtIndex(index, ListView.Beginning)
+                        return true
+                    }
                 }
-                Button {
-                    text: "Expanded"
-                    onClicked: windowPolicy.expanded = true
+                RowLayout {
+                    TextField {
+                        id: query
+                        Layout.fillWidth: true
+                        placeholderText: "Search titles, workspaces, categories or IDs"
+                        focus: true
+                        onTextChanged: screen.submit()
+                        onAccepted: results.item.activate()
+                        Keys.onUpPressed: results.item.move(-1)
+                        Keys.onDownPressed: results.item.move(1)
+                        Keys.onPressed: function(event) {
+                            if (event.key === Qt.Key_PageDown || event.key === Qt.Key_PageUp) {
+                                results.item.move(event.key === Qt.Key_PageDown ? 5 : -5)
+                                event.accepted = true
+                            }
+                        }
+                    }
+                    Button { id: runQuery; text: "Search"; onClicked: screen.submit() }
+                }
+                Label {
+                    id: status
+                    Layout.fillWidth: true
+                    text: screen.info.loading ? "Searching…" : screen.info.count + " results · "
+                        + screen.info.latency_ms.toFixed(2) + " ms · selected: " + (screen.info.selected_id || "none")
+                    textFormat: Text.PlainText
+                    elide: Text.ElideRight
+                }
+                Loader {
+                    id: results
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    Layout.minimumHeight: 54
+                    sourceComponent: resultListComponent
+                    onLoaded: item.state = model
+                }
+                Label {
+                    Layout.fillWidth: true
+                    text: "Activated: " + (screen.info.activated_id || "none")
+                    textFormat: Text.PlainText
+                }
+            }
+        }
+        Label {
+            Layout.alignment: Qt.AlignRight
+            text: "Resize ↘"
+            MouseArea { anchors.fill: parent; onPressed: windowPolicy.startResize() }
+        }
+    }
+    Popup {
+        id: geometry
+        anchors.centerIn: parent
+        width: Math.min(440, window.width - 32)
+        height: Math.min(420, window.height - 32)
+        modal: true
+        ScrollView {
+            anchors.fill: parent
+            contentWidth: availableWidth
+            ColumnLayout {
+                width: parent.width
+                Label {
+                    Layout.fillWidth: true
+                    text: "Requested: " + windowPolicy.requestedSize.width + " × " + windowPolicy.requestedSize.height
+                        + "\nConstrained: " + windowPolicy.constrainedSize.width + " × " + windowPolicy.constrainedSize.height
+                        + "\nObserved: " + window.width + " × " + window.height
+                        + "\nQt screen DPR: " + windowPolicy.scale + " | Output: " + window.Screen.name
+                        + "\nLimits: " + window.minimumWidth + " × " + window.minimumHeight
+                        + " — " + window.maximumWidth + " × " + window.maximumHeight
+                        + "\nAvailable: " + windowPolicy.availableWidth + " × " + windowPolicy.availableHeight
+                        + "\nMove: " + windowPolicy.moveResult + "\nResize: " + windowPolicy.resizeResult
+                    wrapMode: Text.Wrap
+                }
+                Label {
+                    id: windowCommandStatus
+                    Layout.fillWidth: true
+                    wrapMode: Text.Wrap
+                    textFormat: Text.PlainText
+                }
+                RowLayout {
+                    Button { text: "Compact"; onClicked: windowPolicy.expanded = false }
+                    Button { text: "Expanded"; onClicked: windowPolicy.expanded = true }
                 }
                 Button {
                     text: "Hide for 1 second"
-                    onClicked: {
-                        window.requestVisibility("hide")
-                        showAgain.start()
-                    }
+                    onClicked: { geometry.close(); window.requestVisibility("hide"); showAgain.start() }
                 }
-            }
-
-            Repeater {
-                model: windowCommands
-                delegate: Label {
+                TextField {
+                    id: passwordFixture
                     Layout.fillWidth: true
-                    text: model.status
-                    textFormat: Text.PlainText
-                    wrapMode: Text.Wrap
-                    Connections {
-                        target: windowPolicy
-                        function onConstrainedSizeChanged() {
-                            if (windowPolicy.attached && window.visible)
-                                model.request = windowPolicy.constrainedSize
-                        }
-                    }
+                    visible: typeof semanticDebug !== "undefined"
+                    placeholderText: "Password fixture"
+                    text: "SEMANTIC_PASSWORD_SECRET"
+                    echoMode: TextInput.Password
                 }
-            }
-
-            Repeater {
-                model: bridge
-                delegate: ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: 12
-                    Component.onCompleted: {
-                        launcher.query = query
-                        if (typeof semanticDebug === "undefined")
-                            return
-                        semanticDebug.registerControl("query", query, "textbox", "Query",
-                            ["focus", "replace", "select", "key"], null, false)
-                        semanticDebug.registerControl("status", status, "status", "Query status", [], null, false)
-                        semanticDebug.registerControl("run-query", runQuery, "button", "Run query",
-                            ["focus", "activate", "key"], function() { runQuery.clicked() }, false)
-                        semanticDebug.registerControl("quit", quit, "button", "Quit",
-                            ["focus", "activate", "key"], function() { quit.clicked() }, false)
-                        semanticDebug.registerControl("password-fixture", passwordFixture, "password", "Password fixture",
-                            [], null, true)
-                        semanticDebug.registerControl("disabled-fixture", disabledFixture, "button", "Disabled fixture",
-                            ["activate"], function() { disabledFixture.clicked() }, false)
-                    }
-
-                    TextField {
-                        id: query
-                        objectName: "query"
-                        Layout.fillWidth: true
-                        placeholderText: "Enter a query"
-                        focus: true
-                        onActiveFocusChanged: {
-                            if (activeFocus)
-                                viewport.contentItem.contentY = Math.max(0, Math.min(
-                                    viewport.contentHeight - viewport.availableHeight, query.mapToItem(content, 0, 0).y))
-                        }
-                        onAccepted: model.command = text
-                    }
-
-                    Label {
-                        id: status
-                        objectName: "status"
-                        Layout.fillWidth: true
-                        text: model.status
-                        textFormat: Text.PlainText
-                        wrapMode: Text.Wrap
-                    }
-
-                    TextField {
-                        id: passwordFixture
-                        objectName: "password-fixture"
-                        Layout.fillWidth: true
-                        visible: typeof semanticDebug !== "undefined"
-                        placeholderText: "Password fixture"
-                        text: "SEMANTIC_PASSWORD_SECRET"
-                        echoMode: TextInput.Password
-                    }
-
-                    Button {
-                        id: disabledFixture
-                        objectName: "disabled-fixture"
-                        text: "Disabled action fixture"
-                        enabled: false
-                        visible: typeof semanticDebug !== "undefined"
-                    }
-
-                    RowLayout {
-                        Button {
-                            id: runQuery
-                            objectName: "run-query"
-                            text: "Run query"
-                            onClicked: model.command = query.text
-                        }
-                        Button {
-                            id: quit
-                            objectName: "quit"
-                            text: "Quit"
-                            onClicked: Qt.quit()
-                        }
-                    }
+                Button {
+                    id: disabledFixture
+                    text: "Disabled action fixture"
+                    enabled: false
+                    visible: typeof semanticDebug !== "undefined"
                 }
+                Button { text: "Close"; onClicked: geometry.close() }
             }
-            Label {
-                Layout.alignment: Qt.AlignRight
-                text: "Resize ↘"
-                MouseArea {
-                    anchors.fill: parent
-                    onPressed: windowPolicy.startResize()
+        }
+    }
+    Repeater {
+        model: windowCommands
+        delegate: Label {
+            visible: false
+            text: model.status
+            onTextChanged: function() { windowCommandStatus.text = model.status }
+            Connections {
+                target: windowPolicy
+                function onConstrainedSizeChanged() {
+                    if (windowPolicy.attached && window.visible) model.request = windowPolicy.constrainedSize
                 }
             }
         }
