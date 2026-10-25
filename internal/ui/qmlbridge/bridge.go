@@ -7,9 +7,11 @@ import (
 
 	"runix/internal/activation"
 	"runix/internal/search"
+	"runix/internal/table"
 	"runix/internal/ui/launcher"
 	"runix/internal/ui/searchview"
 	"runix/internal/ui/semanticdebug"
+	"runix/internal/ui/tableview"
 	"runix/internal/ui/windowpolicy"
 	"runix/internal/uidebug"
 
@@ -24,6 +26,7 @@ type Options struct {
 	ActivationSocket string
 	StartHidden      bool
 	Activate         func(string)
+	TableRecords     []table.Record
 }
 
 // Run owns the GUI thread until explicit quit. Call once from main.
@@ -54,12 +57,23 @@ func Run(
 	}
 	defer results.Delete()
 	stopDebug := func() {}
+	var grid *tableview.Adapter
 	defer func() {
 		stopDebug()
 		results.Stop()
+		if grid != nil {
+			grid.Stop()
+		}
 		qt.QCoreApplication_SendPostedEvents2(nil, int(qt.QEvent__MetaCall))
 		engine.Delete() // QML objects die before the context model.
+		if grid != nil {
+			grid.Delete()
+		}
 	}()
+	grid, err = tableview.Install(engine, options.TableRecords, options.Activate)
+	if err != nil {
+		return err
+	}
 	if policyErr := windowpolicy.Install(engine); policyErr != nil {
 		return policyErr
 	}
@@ -111,6 +125,7 @@ func Run(
 	}
 	app.OnAboutToQuit(func() {
 		results.Stop()
+		grid.Stop()
 		if debug != nil {
 			debug.Stop()
 		}

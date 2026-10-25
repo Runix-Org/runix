@@ -38,6 +38,29 @@ ApplicationWindow {
             }
             Button { text: "Window"; onClicked: geometry.open() }
             Button {
+                id: searchMode
+                text: "Search"
+                checkable: true
+                checked: true
+                autoExclusive: true
+                onClicked: checked = true
+            }
+            Button {
+                id: tableMode
+                text: "Table"
+                checkable: true
+                checked: false
+                autoExclusive: true
+                onClicked: checked = true
+            }
+            Component.onCompleted: {
+                if (typeof semanticDebug === "undefined") return
+                semanticDebug.registerControl("search-mode", searchMode, "button", "Search mode",
+                    ["activate"], function() { searchMode.clicked() }, false)
+                semanticDebug.registerControl("table-mode", tableMode, "button", "Table mode",
+                    ["activate"], function() { tableMode.clicked() }, false)
+            }
+            Button {
                 id: quit
                 text: "Quit"
                 onClicked: Qt.quit()
@@ -81,6 +104,7 @@ ApplicationWindow {
                     }
                 }
                 RowLayout {
+                    visible: searchMode.checked
                     TextField {
                         id: query
                         Layout.fillWidth: true
@@ -100,6 +124,7 @@ ApplicationWindow {
                     Button { id: runQuery; text: "Search"; onClicked: screen.submit() }
                 }
                 Label {
+                    visible: searchMode.checked
                     id: status
                     Layout.fillWidth: true
                     text: screen.info.loading ? "Searching…" : screen.info.count + " results · "
@@ -107,7 +132,79 @@ ApplicationWindow {
                     textFormat: Text.PlainText
                     elide: Text.ElideRight
                 }
+                Repeater {
+                    model: tableState
+                    delegate: ColumnLayout {
+                        id: tableScreen
+                        visible: tableMode.checked
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        readonly property var tableInfo: JSON.parse(model.snapshot)
+                        RowLayout {
+                            Button { id: updateRecord; text: "Update"; enabled: !!tableScreen.tableInfo.selected_id
+                                onClicked: model.command = JSON.stringify({op: "update", id: tableScreen.tableInfo.selected_id}) }
+                            Button { id: deleteRecord; text: "Delete"; enabled: !!tableScreen.tableInfo.selected_id
+                                onClicked: model.command = JSON.stringify({op: "remove", id: tableScreen.tableInfo.selected_id}) }
+                            Button { id: emptyFixture; text: "Empty"; onClicked: model.command = JSON.stringify({op: "fixture", index: 0}) }
+                            Button { id: singleFixture; text: "Single"; onClicked: model.command = JSON.stringify({op: "fixture", index: 1}) }
+                            Button { id: resetFixture; text: "Reset"; onClicked: model.command = JSON.stringify({op: "fixture", index: 10000}) }
+                        }
+                        Label {
+                            Layout.fillWidth: true
+                            text: tableScreen.tableInfo.count + " records · selected: "
+                                + (tableScreen.tableInfo.selected_id || "none") + " · activated: "
+                                + (tableScreen.tableInfo.activated_id || "none")
+                            elide: Text.ElideRight
+                        }
+                        Loader {
+                            id: tableViewLoader
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            sourceComponent: tableViewComponent
+                            onLoaded: item.state = model
+                        }
+                        Connections {
+                            target: tableMode
+                            function onCheckedChanged() {
+                                if (tableMode.checked && tableViewLoader.item)
+                                    launcher.query = tableViewLoader.item.view
+                                else
+                                    launcher.query = query
+                            }
+                        }
+                        Component.onCompleted: {
+                            if (typeof semanticDebug === "undefined") return
+                            semanticDebug.registerControl("table", tableViewLoader, "table", "Records",
+                                ["focus", "select", "scroll", "activate"],
+                                function() { tableViewLoader.item.activate() }, false)
+                            semanticDebug.controls.table.inspect = function() { return tableViewLoader.item.inspect() }
+                            semanticDebug.controls.table.select = function(text) {
+                                if (!/^[0-9]+$/.test(text)) return false
+                                return tableViewLoader.item.select(Number(text))
+                            }
+                            semanticDebug.controls.table.scroll = function(text) {
+                                if (!/^[0-9]+$/.test(text)) return false
+                                const index = Number(text)
+                                if (index >= tableViewLoader.item.view.rows) return false
+                                tableViewLoader.item.view.positionViewAtRow(index, TableView.Beginning)
+                                return true
+                            }
+                            semanticDebug.registerControl("table-update", updateRecord, "button", "Update record",
+                                ["activate"], function() { updateRecord.clicked() }, false)
+                            semanticDebug.registerControl("table-delete", deleteRecord, "button", "Delete record",
+                                ["activate"], function() { deleteRecord.clicked() }, false)
+                            semanticDebug.registerControl("table-empty", emptyFixture, "button", "Empty table fixture",
+                                ["activate"], function() { emptyFixture.clicked() }, false)
+                            semanticDebug.registerControl("table-single", singleFixture, "button", "Single table fixture",
+                                ["activate"], function() { singleFixture.clicked() }, false)
+                            semanticDebug.registerControl("table-reset", resetFixture, "button", "Reset table fixture",
+                                ["activate"], function() { resetFixture.clicked() }, false)
+                            semanticDebug.controls.table.activate = function() { tableViewLoader.item.activate() }
+                        }
+                    }
+                }
                 Loader {
+                    visible: searchMode.checked
                     id: results
                     Layout.fillWidth: true
                     Layout.fillHeight: true
@@ -116,6 +213,7 @@ ApplicationWindow {
                     onLoaded: item.state = model
                 }
                 Label {
+                    visible: searchMode.checked
                     Layout.fillWidth: true
                     text: "Activated: " + (screen.info.activated_id || "none")
                     textFormat: Text.PlainText

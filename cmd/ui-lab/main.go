@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 
 	"runix/internal/search"
+	"runix/internal/table"
 	"runix/internal/ui/qmlbridge"
 )
 
@@ -45,6 +46,7 @@ func run() error {
 		ActivationSocket: *activationSocket,
 		StartHidden:      *startHidden,
 		Activate:         func(id string) { fmt.Printf("Activated record: %s\n", id) },
+		TableRecords:     tableFixture(),
 	}
 	return qmlbridge.Run(args, document, search.NewIndex(searchFixture()).Search, options)
 }
@@ -60,6 +62,22 @@ func searchFixture() []search.Record {
 			Title:    fmt.Sprintf("%s %03d", names[index%len(names)], index%100),
 			Subtitle: fmt.Sprintf("Workspace %02d project %03d", index%17, index%113),
 			Category: categories[(index/len(names))%len(categories)],
+		}
+	}
+	return records
+}
+
+func tableFixture() []table.Record {
+	names := [...]string{"Atlas", "Bridge", "Console", "Delta"}
+	statuses := [...]string{"Ready", "Running", "Stopped"}
+	values := [...]int{2, 10, 100, 0, 25, 1000, 7}
+	records := make([]table.Record, 10_000)
+	for index := range records {
+		records[index] = table.Record{
+			ID:     fmt.Sprintf("table-%05d", index),
+			Title:  fmt.Sprintf("%s %03d", names[index%len(names)], index%100),
+			Value:  values[index%len(values)],
+			Status: statuses[index%len(statuses)],
 		}
 	}
 	return records
