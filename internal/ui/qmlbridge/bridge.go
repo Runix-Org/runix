@@ -8,6 +8,7 @@ import (
 	"runix/internal/activation"
 	"runix/internal/search"
 	"runix/internal/table"
+	"runix/internal/ui/formview"
 	"runix/internal/ui/launcher"
 	"runix/internal/ui/searchview"
 	"runix/internal/ui/semanticdebug"
@@ -58,19 +59,30 @@ func Run(
 	defer results.Delete()
 	stopDebug := func() {}
 	var grid *tableview.Adapter
+	var form *formview.Adapter
 	defer func() {
 		stopDebug()
 		results.Stop()
 		if grid != nil {
 			grid.Stop()
 		}
+		if form != nil {
+			form.Stop()
+		}
 		qt.QCoreApplication_SendPostedEvents2(nil, int(qt.QEvent__MetaCall))
 		engine.Delete() // QML objects die before the context model.
 		if grid != nil {
 			grid.Delete()
 		}
+		if form != nil {
+			form.Delete()
+		}
 	}()
 	grid, err = tableview.Install(engine, options.TableRecords, options.Activate)
+	if err != nil {
+		return err
+	}
+	form, err = formview.Install(engine)
 	if err != nil {
 		return err
 	}
@@ -126,6 +138,7 @@ func Run(
 	app.OnAboutToQuit(func() {
 		results.Stop()
 		grid.Stop()
+		form.Stop()
 		if debug != nil {
 			debug.Stop()
 		}

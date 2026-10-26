@@ -4,6 +4,20 @@ import QtQuick.Layouts
 
 ApplicationWindow {
     id: window
+    property var formItem: null
+    property var searchInput: null
+    readonly property var labTheme: themeLoader.item
+    Loader { id: themeLoader; sourceComponent: labThemeComponent }
+    palette.window: labTheme ? labTheme.surface : "#202832"
+    palette.windowText: labTheme ? labTheme.foreground : "#e8edf2"
+    palette.text: palette.windowText
+    palette.buttonText: palette.windowText
+    palette.base: labTheme ? labTheme.field : "#151c23"
+    palette.button: palette.window
+    palette.highlight: labTheme ? labTheme.accent : "#79b8ff"
+    onVisibleChanged: {
+        if (!visible && formItem) formItem.cancel()
+    }
     visible: !launcherStartHidden
     flags: Qt.Window | Qt.FramelessWindowHint
     title: "runix UI laboratory"
@@ -16,7 +30,10 @@ ApplicationWindow {
             semanticDebug.dismiss = function() { window.requestVisibility("hide") }
         }
     }
-    function requestVisibility(command) { visibilityCommand.itemAt(0).request(command) }
+    function requestVisibility(command) {
+        if (command === "hide" && formMode.checked && formItem) formItem.cancel()
+        visibilityCommand.itemAt(0).request(command)
+    }
     Repeater {
         id: visibilityCommand
         model: launcherCommands
@@ -27,23 +44,36 @@ ApplicationWindow {
 
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: 16
-        spacing: 8
+        anchors.margins: window.labTheme ? window.labTheme.spacing * 2 : 16
+        spacing: window.labTheme ? window.labTheme.spacing : 8
         RowLayout {
             Label {
                 Layout.fillWidth: true
-                text: "Search · 50,000 records"
+                Layout.minimumWidth: 0
+                elide: Text.ElideRight
+                text: "UI laboratory"
                 font.pixelSize: 20
                 MouseArea { anchors.fill: parent; onPressed: windowPolicy.startMove() }
             }
             Button { text: "Window"; onClicked: geometry.open() }
+            Button {
+                id: quit
+                text: "Quit"
+                onClicked: Qt.quit()
+            }
+        }
+        RowLayout {
             Button {
                 id: searchMode
                 text: "Search"
                 checkable: true
                 checked: true
                 autoExclusive: true
-                onClicked: checked = true
+                onClicked: {
+                    checked = true
+                    launcher.query = window.searchInput
+                    if (launcher.query) launcher.query.forceActiveFocus(Qt.TabFocusReason)
+                }
             }
             Button {
                 id: tableMode
@@ -53,17 +83,30 @@ ApplicationWindow {
                 autoExclusive: true
                 onClicked: checked = true
             }
+            Button {
+                id: formMode
+                text: "Form"
+                checkable: true
+                autoExclusive: true
+                onClicked: checked = true
+                onCheckedChanged: {
+                    if (!window.formItem) return
+                    if (checked) {
+                        launcher.query = window.formItem.initialFocus
+                        launcher.query.forceActiveFocus(Qt.TabFocusReason)
+                    } else {
+                        window.formItem.cancel()
+                    }
+                }
+            }
             Component.onCompleted: {
                 if (typeof semanticDebug === "undefined") return
                 semanticDebug.registerControl("search-mode", searchMode, "button", "Search mode",
                     ["activate"], function() { searchMode.clicked() }, false)
                 semanticDebug.registerControl("table-mode", tableMode, "button", "Table mode",
                     ["activate"], function() { tableMode.clicked() }, false)
-            }
-            Button {
-                id: quit
-                text: "Quit"
-                onClicked: Qt.quit()
+                semanticDebug.registerControl("form-mode", formMode, "button", "Form mode",
+                    ["activate"], function() { formMode.clicked() }, false)
             }
         }
         Repeater {
@@ -71,11 +114,13 @@ ApplicationWindow {
             delegate: ColumnLayout {
                 id: screen
                 Layout.fillWidth: true
+                visible: !formMode.checked
                 Layout.fillHeight: true
                 readonly property var info: JSON.parse(model.snapshot)
                 function submit() { model.command = JSON.stringify({op: "query", text: query.text}) }
                 Component.onCompleted: {
                     launcher.query = query
+                    window.searchInput = query
                     if (typeof semanticDebug === "undefined") return
                     semanticDebug.registerControl("query", query, "textbox", "Query",
                         ["focus", "replace", "select", "key"], null, false)
@@ -110,6 +155,12 @@ ApplicationWindow {
                         Layout.fillWidth: true
                         placeholderText: "Search titles, workspaces, categories or IDs"
                         focus: true
+                        background: Rectangle {
+                            color: window.palette.base
+                            radius: window.labTheme ? window.labTheme.radius : 5
+                            border.color: query.activeFocus ? window.palette.highlight : window.palette.mid
+                            border.width: query.activeFocus ? 2 : 1
+                        }
                         onTextChanged: screen.submit()
                         onAccepted: results.item.activate()
                         Keys.onUpPressed: results.item.move(-1)
@@ -168,7 +219,7 @@ ApplicationWindow {
                             function onCheckedChanged() {
                                 if (tableMode.checked && tableViewLoader.item)
                                     launcher.query = tableViewLoader.item.view
-                                else
+                                else if (!formMode.checked)
                                     launcher.query = query
                             }
                         }
@@ -217,6 +268,24 @@ ApplicationWindow {
                     Layout.fillWidth: true
                     text: "Activated: " + (screen.info.activated_id || "none")
                     textFormat: Text.PlainText
+                }
+            }
+        }
+        Repeater {
+            model: formState
+            delegate: Loader {
+                id: formLoader
+                visible: formMode.checked
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                sourceComponent: formViewComponent
+                onLoaded: {
+                    item.state = model
+                    window.formItem = item
+                }
+                Connections {
+                    target: formLoader.item
+                    function onDismissed() { window.requestVisibility("hide") }
                 }
             }
         }
