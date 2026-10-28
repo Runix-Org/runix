@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"runix/internal/search"
+	"runix/internal/ui/icons"
 
 	qt "github.com/mappu/miqt/qt6"
 	"github.com/mappu/miqt/qt6/mainthread"
@@ -26,6 +27,7 @@ const (
 	titleRole
 	subtitleRole
 	categoryRole
+	iconRole
 )
 
 type snapshot struct {
@@ -41,6 +43,7 @@ type snapshot struct {
 	AppliedMS         int64        `json:"applied_ms"`
 	LatencyMS         float64      `json:"latency_ms"`
 	Work              search.Stats `json:"work"`
+	Icons             icons.Stats  `json:"icons"`
 }
 
 // Adapter owns models and the search controller. All methods run on the GUI thread.
@@ -53,10 +56,13 @@ type Adapter struct {
 	value      snapshot
 	activate   func(string)
 	stopped    bool
+	icons      *icons.Source
 }
 
 // Install exposes searchState, searchRows and the embedded resultListComponent.
-func Install(engine *qml.QQmlApplicationEngine, find search.Find, activate func(string)) (*Adapter, error) {
+func Install(
+	engine *qml.QQmlApplicationEngine, find search.Find, activate func(string), source *icons.Source,
+) (*Adapter, error) {
 	component := qml.NewQQmlComponent2(engine.QQmlEngine)
 	component.SetParent(engine.QObject)
 	url := qt.NewQUrl3("qrc:/runix/searchview/ResultList.qml")
@@ -68,6 +74,7 @@ func Install(engine *qml.QQmlApplicationEngine, find search.Find, activate func(
 	a := &Adapter{
 		state: qt.NewQAbstractListModel(), rows: qt.NewQAbstractListModel(),
 		root: qt.NewQModelIndex(), activate: activate, value: snapshot{SelectedIndex: -1},
+		icons: source,
 	}
 	if find == nil {
 		find = func(context.Context, string) []search.Record { return nil }
@@ -90,6 +97,7 @@ func Install(engine *qml.QQmlApplicationEngine, find search.Find, activate func(
 			return qt.NewQVariant()
 		}
 		a.value.Work = a.controller.Stats()
+		a.value.Icons = a.icons.Stats()
 		data, _ := json.Marshal(a.value) // Fixed fields contain only JSON-supported types.
 		return qt.NewQVariant14(string(data))
 	})
@@ -126,6 +134,12 @@ func Install(engine *qml.QQmlApplicationEngine, find search.Find, activate func(
 			if a.activate != nil {
 				a.activate(a.value.SelectedID)
 			}
+		case "icons-refresh", "icons-theme":
+			a.icons.Refresh(command.Op == "icons-theme")
+			a.rows.BeginResetModel()
+			a.rows.EndResetModel()
+		case "icons-stats":
+			// Publish current cache counters without changing rows.
 		default:
 			return false
 		}
@@ -142,6 +156,7 @@ func Install(engine *qml.QQmlApplicationEngine, find search.Find, activate func(
 		return map[int][]byte{
 			idRole: []byte("recordID"), titleRole: []byte("title"),
 			subtitleRole: []byte("subtitle"), categoryRole: []byte("category"),
+			iconRole: []byte("iconSource"),
 		}
 	})
 	a.rows.OnData(func(index *qt.QModelIndex, role int) *qt.QVariant {
@@ -158,6 +173,8 @@ func Install(engine *qml.QQmlApplicationEngine, find search.Find, activate func(
 			return qt.NewQVariant14(record.Subtitle)
 		case categoryRole:
 			return qt.NewQVariant14(record.Category)
+		case iconRole:
+			return qt.NewQVariant14(a.icons.URL(record.IconName, record.IconPath))
 		default:
 			return qt.NewQVariant()
 		}

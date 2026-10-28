@@ -174,6 +174,34 @@ ApplicationWindow {
                     }
                     Button { id: runQuery; text: "Search"; onClicked: screen.submit() }
                 }
+                RowLayout {
+                    visible: searchMode.checked
+                    Button {
+                        id: iconTheme
+                        text: "Switch icon theme"
+                        onClicked: model.command = JSON.stringify({op: "icons-theme"})
+                    }
+                    Button {
+                        id: iconRefresh
+                        text: "Refresh icons"
+                        onClicked: model.command = JSON.stringify({op: "icons-refresh"})
+                    }
+                    ComboBox {
+                        id: iconSize
+                        model: [16, 24, 32, 48]
+                        currentIndex: 2
+                        onActivated: if (results.item) results.item.iconSize = Number(currentText)
+                    }
+                    Component.onCompleted: {
+                        if (typeof semanticDebug === "undefined") return
+                        semanticDebug.registerControl("icon-theme", iconTheme, "button", "Switch icon theme",
+                            ["activate"], function() { iconTheme.clicked() }, false)
+                        semanticDebug.registerControl("icon-refresh", iconRefresh, "button", "Refresh icons",
+                            ["activate"], function() { iconRefresh.clicked() }, false)
+                        semanticDebug.registerControl("icon-size", iconSize, "combobox", "Icon size",
+                            ["focus", "key"], null, false)
+                    }
+                }
                 Label {
                     visible: searchMode.checked
                     id: status

@@ -9,6 +9,7 @@ import (
 	"runix/internal/search"
 	"runix/internal/table"
 	"runix/internal/ui/formview"
+	"runix/internal/ui/icons"
 	"runix/internal/ui/launcher"
 	"runix/internal/ui/searchview"
 	"runix/internal/ui/semanticdebug"
@@ -28,6 +29,8 @@ type Options struct {
 	StartHidden      bool
 	Activate         func(string)
 	TableRecords     []table.Record
+	IconThemePaths   []string
+	IconThemes       []string
 }
 
 // Run owns the GUI thread until explicit quit. Call once from main.
@@ -51,7 +54,8 @@ func Run(
 	qt.QGuiApplication_SetDesktopFileName("runix-ui-lab")
 
 	engine := qml.NewQQmlApplicationEngine()
-	results, err := searchview.Install(engine, find, options.Activate)
+	source := icons.New(options.IconThemePaths, options.IconThemes)
+	results, err := searchview.Install(engine, find, options.Activate, source)
 	if err != nil {
 		engine.Delete()
 		return err

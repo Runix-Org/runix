@@ -13,6 +13,8 @@ import (
 // Record is a searchable item. ID is the stable identity supplied by callers.
 type Record struct {
 	ID, Title, Subtitle, Category string
+	// IconName and IconPath are mutually exclusive trusted presentation data.
+	IconName, IconPath string
 }
 
 // Find performs a query and returns matching records. Implementations may ignore

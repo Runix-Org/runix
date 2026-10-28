@@ -5,6 +5,7 @@ FocusScope {
     id: root
     property var state: null
     readonly property var info: state ? JSON.parse(state.snapshot) : ({loading: true, selected_index: -1})
+    property int iconSize: 32
     property int delegateCount: 0
     readonly property alias view: list
 
@@ -23,11 +24,13 @@ FocusScope {
     }
     function activate() { command("activate") }
     function inspect() {
+        command("icons-stats")
         const rows = []
         for (const child of list.contentItem.children) {
             if (child.recordKey !== undefined && child.y + child.height > list.contentY
                     && child.y < list.contentY + list.height)
-                rows.push({index: child.rowIndex, id: child.recordKey, title: child.rowTitle})
+                rows.push({index: child.rowIndex, id: child.recordKey, title: child.rowTitle,
+                    icon_status: child.iconStatus, icon_width: child.iconWidth})
         }
         rows.sort(function(a, b) { return a.index - b.index })
         return {state: info, delegates: delegateCount, viewport_height: list.height,
@@ -61,27 +64,46 @@ FocusScope {
             required property string title
             required property string subtitle
             required property string category
+            required property string iconSource
+            readonly property int iconStatus: rowImage.status
+            readonly property int iconWidth: rowImage.implicitWidth
             readonly property string recordKey: recordID
             readonly property string rowTitle: title
             readonly property int rowIndex: index
             width: list.width
-            height: 54
+            height: Math.max(54, root.iconSize + 12)
             highlighted: index === root.info.selected_index
             enabled: !root.info.loading
             focusPolicy: Qt.NoFocus
-            contentItem: Column {
-                Label {
-                    width: parent.width
-                    text: row.title + "  ·  " + row.category
-                    textFormat: Text.PlainText
-                    elide: Text.ElideRight
+            contentItem: Row {
+                spacing: 10
+                Image {
+                    id: rowImage
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: root.iconSize
+                    height: root.iconSize
+                    source: row.iconSource
+                    cache: false
+                    smooth: true
+                    mipmap: true
+                    fillMode: Image.PreserveAspectFit
                 }
-                Label {
-                    width: parent.width
-                    text: row.subtitle + "  [" + row.recordID + "]"
-                    textFormat: Text.PlainText
-                    font.pixelSize: 12
-                    elide: Text.ElideRight
+                Column {
+                    width: parent.width - root.iconSize - parent.spacing
+                    anchors.verticalCenter: parent.verticalCenter
+                    Label {
+                        width: parent.width
+                        text: row.title + "  ·  " + row.category
+                        textFormat: Text.PlainText
+                        elide: Text.ElideRight
+                    }
+                    Label {
+                        width: parent.width
+                        text: row.subtitle + "  [" + row.recordID + "]"
+                        textFormat: Text.PlainText
+                        font.pixelSize: 12
+                        elide: Text.ElideRight
+                    }
                 }
             }
             onClicked: root.select(index)

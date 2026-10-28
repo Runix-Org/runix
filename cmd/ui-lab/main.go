@@ -39,6 +39,11 @@ func run() error {
 		*activationSocket = filepath.Join(directory, "ui.sock")
 	}
 	fmt.Printf("Activation socket: %s\n", *activationSocket)
+	iconDirectory, iconRefs, iconErr := iconFixture()
+	if iconErr != nil {
+		return iconErr
+	}
+	defer func() { _ = os.RemoveAll(iconDirectory) }()
 	args := append([]string{os.Args[0]}, flag.Args()...)
 	options := qmlbridge.Options{
 		HyprlandWindow:   *hyprlandWindow,
@@ -47,21 +52,26 @@ func run() error {
 		StartHidden:      *startHidden,
 		Activate:         func(id string) { fmt.Printf("Activated record: %s\n", id) },
 		TableRecords:     tableFixture(),
+		IconThemePaths:   []string{iconDirectory},
+		IconThemes:       []string{"runix-a", "runix-b"},
 	}
-	return qmlbridge.Run(args, document, search.NewIndex(searchFixture()).Search, options)
+	return qmlbridge.Run(args, document, search.NewIndex(searchFixture(iconRefs)).Search, options)
 }
 
 // Deliberate title collisions exercise stable IDs and cross-field ranking.
-func searchFixture() []search.Record {
+func searchFixture(icons []labIcon) []search.Record {
 	names := [...]string{"Atlas", "Bridge", "Console", "Delta", "Editor", "Files", "Graph", "Help"}
 	categories := [...]string{"Application", "Document", "Command", "Bookmark"}
 	records := make([]search.Record, 50_000)
 	for index := range records {
+		icon := icons[index%len(icons)]
 		records[index] = search.Record{
 			ID:       fmt.Sprintf("record-%05d", index),
 			Title:    fmt.Sprintf("%s %03d", names[index%len(names)], index%100),
-			Subtitle: fmt.Sprintf("Workspace %02d project %03d", index%17, index%113),
+			Subtitle: fmt.Sprintf("Workspace %02d project %03d · %s", index%17, index%113, icon.label),
 			Category: categories[(index/len(names))%len(categories)],
+			IconName: icon.name,
+			IconPath: icon.path,
 		}
 	}
 	return records
