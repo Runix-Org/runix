@@ -78,23 +78,32 @@ func Install(engine *qml.QQmlApplicationEngine, hyprland, hidden bool) (*Adapter
 		if command != "hide" && command != "show" && command != "toggle" {
 			return false
 		}
-		if !a.pending.CompareAndSwap(false, true) {
-			return false
-		}
-		a.workers.Add(1)
-		go func() {
-			defer a.workers.Done()
-			defer a.pending.Store(false)
-			ctx, cancel := context.WithTimeout(a.ctx, 1500*time.Millisecond)
-			defer cancel()
-			if err := a.handle(ctx, command); err != nil {
-				fmt.Fprintln(os.Stderr, err)
-			}
-		}()
-		return true
+		return a.Request(command)
 	})
 	engine.RootContext().SetContextProperty("launcherCommands", model.QObject)
 	return a, nil
+}
+
+// Request submits a GUI-originated operation without blocking the event loop.
+// Call only on the GUI thread, including during shutdown.
+func (a *Adapter) Request(command string) bool {
+	if command != "show" && command != "hide" && command != "toggle" {
+		return false
+	}
+	if a.stopped.Load() || !a.pending.CompareAndSwap(false, true) {
+		return false
+	}
+	a.workers.Add(1)
+	go func() {
+		defer a.workers.Done()
+		defer a.pending.Store(false)
+		ctx, cancel := context.WithTimeout(a.ctx, 1500*time.Millisecond)
+		defer cancel()
+		if err := a.handle(ctx, command); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+		}
+	}()
+	return true
 }
 
 // Stop cancels requests and joins only adapter-owned workers, never GUI callbacks.

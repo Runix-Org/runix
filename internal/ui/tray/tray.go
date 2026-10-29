@@ -1,0 +1,67 @@
+// Package tray owns the native Qt tray icon and its menu on the GUI thread.
+package tray
+
+import (
+	"fmt"
+	"os"
+	"runtime"
+
+	qt "github.com/mappu/miqt/qt6"
+)
+
+// Install retains one registration, even without a host so Qt can register later.
+// Request must submit launcher work without blocking the GUI thread.
+// Call the returned cleanup on the GUI thread before destroying the application.
+func Install(request func(string) bool) func() {
+	// A built-in raster icon does not depend on a desktop theme or SVG plugin.
+	image := qt.NewQImage3(32, 32, qt.QImage__Format_ARGB32)
+	image.Fill(0xff3878d4)
+	for y := 7; y < 25; y++ {
+		for x := 8; x < 24; x++ {
+			if x < 12 || y < 11 || y >= 15 && y < 19 || x-y >= 0 && x-y <= 3 {
+				image.SetPixel(x, y, 0xffffffff)
+			}
+		}
+	}
+	pixmap := qt.QPixmap_FromImage(image)
+	runtime.SetFinalizer(pixmap, nil)
+	icon := qt.NewQIcon2(pixmap)
+	entry := qt.NewQSystemTrayIcon2(icon)
+	icon.Delete()
+	pixmap.Delete()
+	image.Delete()
+	menu := qt.NewQMenu2()
+	for _, action := range []struct{ label, command string }{
+		{"Show", "show"}, {"Hide", "hide"}, {"Show / Hide", "toggle"},
+	} {
+		menu.AddActionWithText(action.label).OnTriggered(func() {
+			if !request(action.command) {
+				fmt.Fprintln(os.Stderr, "Launcher activation is busy or stopping.")
+			}
+		})
+	}
+	menu.AddSeparator()
+	menu.AddActionWithText("Quit").OnTriggered(qt.QCoreApplication_Quit)
+	entry.SetContextMenu(menu)
+	entry.SetToolTip("runix UI laboratory")
+	entry.OnActivated(func(reason qt.QSystemTrayIcon__ActivationReason) {
+		if reason == qt.QSystemTrayIcon__Trigger {
+			if !request("toggle") {
+				fmt.Fprintln(os.Stderr, "Launcher activation is busy or stopping.")
+			}
+		}
+	})
+	if !qt.QSystemTrayIcon_IsSystemTrayAvailable() {
+		fmt.Fprintln(os.Stderr, "System tray is unavailable. Use the activation socket to show the window.")
+	}
+	entry.Show()
+	return func() {
+		if entry == nil {
+			return
+		}
+		entry.Hide()
+		entry.Delete()
+		menu.Delete()
+		entry = nil
+	}
+}

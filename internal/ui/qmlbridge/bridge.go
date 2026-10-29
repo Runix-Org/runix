@@ -14,6 +14,7 @@ import (
 	"runix/internal/ui/searchview"
 	"runix/internal/ui/semanticdebug"
 	"runix/internal/ui/tableview"
+	"runix/internal/ui/tray"
 	"runix/internal/ui/windowpolicy"
 	"runix/internal/uidebug"
 
@@ -139,6 +140,8 @@ func Run(
 			stopSocket()
 		}
 	}
+	stopTray := tray.Install(lifecycle.Request)
+	defer stopTray()
 	app.OnAboutToQuit(func() {
 		results.Stop()
 		grid.Stop()
@@ -149,6 +152,7 @@ func Run(
 		stopActivation()
 		stopDebug()
 		stopWindow()
+		stopTray()
 		qt.QCoreApplication_SendPostedEvents2(nil, int(qt.QEvent__MetaCall))
 	})
 	fmt.Printf("UI backend: %s\n", qt.QGuiApplication_PlatformName())
