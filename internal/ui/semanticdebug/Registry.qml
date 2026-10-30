@@ -38,7 +38,8 @@ QtObject {
         const inView = visible && right > left && bottom > top
         const description = {id: id, role: entry.role, label: entry.label, visible: visible,
                 enabled: item.enabled, focused: item.activeFocus,
-                value: entry.secret ? null : String(item.text === undefined ? "" : item.text),
+                value: entry.secret ? null : entry.readValue ? entry.readValue()
+                    : String(item.text === undefined ? "" : item.text),
                 redacted: entry.secret, actions: entry.actions, bounds: bounds,
                 in_view: inView, clipped: !inView || left > origin.x || top > origin.y
                     || right < origin.x + item.width || bottom < origin.y + item.height,

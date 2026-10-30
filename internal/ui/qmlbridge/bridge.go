@@ -8,6 +8,7 @@ import (
 	"runix/internal/activation"
 	"runix/internal/search"
 	"runix/internal/table"
+	"runix/internal/ui/detailview"
 	"runix/internal/ui/formview"
 	"runix/internal/ui/icons"
 	"runix/internal/ui/launcher"
@@ -32,6 +33,8 @@ type Options struct {
 	TableRecords     []table.Record
 	IconThemePaths   []string
 	IconThemes       []string
+	DetailContent    func(string) (string, string)
+	DetailLink       func(string)
 }
 
 // Run owns the GUI thread until explicit quit. Call once from main.
@@ -65,6 +68,7 @@ func Run(
 	stopDebug := func() {}
 	var grid *tableview.Adapter
 	var form *formview.Adapter
+	var detail *detailview.Adapter
 	defer func() {
 		stopDebug()
 		results.Stop()
@@ -74,6 +78,9 @@ func Run(
 		if form != nil {
 			form.Stop()
 		}
+		if detail != nil {
+			detail.Stop()
+		}
 		qt.QCoreApplication_SendPostedEvents2(nil, int(qt.QEvent__MetaCall))
 		engine.Delete() // QML objects die before the context model.
 		if grid != nil {
@@ -82,12 +89,19 @@ func Run(
 		if form != nil {
 			form.Delete()
 		}
+		if detail != nil {
+			detail.Delete()
+		}
 	}()
 	grid, err = tableview.Install(engine, options.TableRecords, options.Activate)
 	if err != nil {
 		return err
 	}
 	form, err = formview.Install(engine)
+	if err != nil {
+		return err
+	}
+	detail, err = detailview.Install(engine, options.DetailContent, options.DetailLink)
 	if err != nil {
 		return err
 	}
@@ -146,6 +160,7 @@ func Run(
 		results.Stop()
 		grid.Stop()
 		form.Stop()
+		detail.Stop()
 		if debug != nil {
 			debug.Stop()
 		}

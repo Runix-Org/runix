@@ -282,14 +282,34 @@ ApplicationWindow {
                         }
                     }
                 }
-                Loader {
+                SplitView {
                     visible: searchMode.checked
-                    id: results
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     Layout.minimumHeight: 54
-                    sourceComponent: resultListComponent
-                    onLoaded: item.state = model
+                    orientation: Qt.Horizontal
+                    Loader {
+                        id: results
+                        SplitView.preferredWidth: 380
+                        SplitView.minimumWidth: 180
+                        SplitView.fillHeight: true
+                        sourceComponent: resultListComponent
+                        onLoaded: item.state = model
+                    }
+                    Repeater {
+                        model: detailState
+                        delegate: Loader {
+                            SplitView.fillWidth: true
+                            SplitView.minimumWidth: 180
+                            SplitView.fillHeight: true
+                            sourceComponent: detailPanelComponent
+                            onLoaded: {
+                                item.state = model
+                                item.semanticDebug = typeof semanticDebug !== "undefined" ? semanticDebug : null
+                                item.contentID = Qt.binding(function() { return screen.info.selected_id })
+                            }
+                        }
+                    }
                 }
                 Label {
                     visible: searchMode.checked

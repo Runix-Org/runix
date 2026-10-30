@@ -54,6 +54,8 @@ func run() error {
 		TableRecords:     tableFixture(),
 		IconThemePaths:   []string{iconDirectory},
 		IconThemes:       []string{"runix-a", "runix-b"},
+		DetailContent:    detailFixture,
+		DetailLink:       func(url string) { fmt.Printf("Allowed detail link: %s\n", url) },
 	}
 	return qmlbridge.Run(args, document, search.NewIndex(searchFixture(iconRefs)).Search, options)
 }

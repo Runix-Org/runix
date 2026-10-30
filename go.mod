@@ -5,6 +5,7 @@ go 1.26.0
 require (
 	github.com/mappu/miqt v0.15.0
 	github.com/stretchr/testify v1.11.1
+	github.com/yuin/goldmark v1.8.2
 )
 
 require (
