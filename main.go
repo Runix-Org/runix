@@ -1,9 +1,14 @@
 package main
 
 import (
-	"fmt"
+	"runix/internal/cli"
+
+	"github.com/alecthomas/kong"
 )
 
 func main() {
-	fmt.Println("Hello, world!")
+	context := kong.Parse(&cli.Command{},
+		kong.Name("runix"),
+		kong.Description("Show a searchable list of installed applications."))
+	context.FatalIfErrorf(context.Run())
 }

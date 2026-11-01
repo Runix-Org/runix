@@ -3,6 +3,7 @@ module runix
 go 1.26.0
 
 require (
+	github.com/alecthomas/kong v1.17.0
 	github.com/godbus/dbus/v5 v5.2.4
 	github.com/mappu/miqt v0.15.0
 	github.com/stretchr/testify v1.11.1

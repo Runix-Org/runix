@@ -70,9 +70,7 @@ func InstallHyprland(engine *qml.QQmlApplicationEngine, enabled bool) (func(), e
 		if !enabled || stopping || !index.IsValid() || index.Row() != 0 || role != requestRole {
 			return false
 		}
-		size := value.ToSize()
-		defer size.Delete()
-		next := dimensions{size.Width(), size.Height()}
+		next := requestedDimensions(value)
 		if next.width < 1 || next.height < 1 {
 			return false
 		}
@@ -134,4 +132,13 @@ func resizeHyprland(parent context.Context, size dimensions) string {
 		return "Hyprland resize failed: " + strings.TrimSpace(string(output))
 	}
 	return "Hyprland command accepted; compare observed geometry"
+}
+
+// requestedDimensions copies the size before releasing MIQT's value-return wrapper.
+func requestedDimensions(value *qt.QVariant) dimensions {
+	size := value.ToSize()
+	// Cancel MIQT's finalizer before deterministic deletion on the GUI thread.
+	runtime.SetFinalizer(size, nil)
+	defer size.Delete()
+	return dimensions{size.Width(), size.Height()}
 }

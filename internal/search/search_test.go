@@ -43,6 +43,14 @@ func (s *SearchSuite) TestIndexSearchRankingAndLimit() {
 	s.Equal("000", got[0].ID)
 }
 
+func (s *SearchSuite) TestSearchTextMatchesWithoutChangingDisplayFields() {
+	record := Record{ID: "app.desktop", Title: "Localized", Subtitle: "Comment", SearchText: "Base Name Keywords"}
+	got := NewIndex([]Record{record}).Search(context.Background(), "base keywords")
+	s.Require().Len(got, 1)
+	s.Equal("Localized", got[0].Title)
+	s.Equal("Comment", got[0].Subtitle)
+}
+
 func (s *SearchSuite) TestControllerRejectsIgnoringCancellationAndCoalescesBurst() {
 	started := make(chan string, 8)
 	releaseOld := make(chan struct{})

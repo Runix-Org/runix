@@ -13,6 +13,8 @@ import (
 // Record is a searchable item. ID is the stable identity supplied by callers.
 type Record struct {
 	ID, Title, Subtitle, Category string
+	// SearchText contains additional non-display text matched by the index.
+	SearchText string
 	// IconName and IconPath are mutually exclusive trusted presentation data.
 	IconName, IconPath string
 }
@@ -24,12 +26,13 @@ type Find func(context.Context, string) []Record
 const resultLimit = 200
 
 type indexedRecord struct {
-	record   Record
-	id       string
-	title    string
-	subtitle string
-	category string
-	ordinal  int
+	record     Record
+	id         string
+	title      string
+	subtitle   string
+	category   string
+	searchText string
+	ordinal    int
 }
 
 // Index stores pre-normalized records for repeated searches.
@@ -43,7 +46,8 @@ func NewIndex(records []Record) *Index {
 	for n, r := range records {
 		i.records[n] = indexedRecord{
 			record: r, id: normalize(r.ID), title: normalize(r.Title),
-			subtitle: normalize(r.Subtitle), category: normalize(r.Category), ordinal: n,
+			subtitle: normalize(r.Subtitle), category: normalize(r.Category),
+			searchText: normalize(r.SearchText), ordinal: n,
 		}
 	}
 	return i
@@ -92,11 +96,12 @@ func better(a, b candidate) bool {
 }
 
 // Search matches case-insensitive whitespace-delimited tokens across ID, title,
-// subtitle, and category; every token must match. Each token scores 100 for an
-// exact field, 50 for a field prefix, or 10 for a substring (best field wins).
-// Results sort by descending score then original input order (stable ties). A
-// bounded heap retains only the best 200 rather than sorting all matches. Empty
-// queries return the first 200 records in original order.
+// subtitle, category, and non-display SearchText; every token must match. Each
+// token scores 100 for an exact field, 50 for a field prefix, or 10 for a
+// substring (best field wins). Results sort by descending score then original
+// input order (stable ties). A bounded heap retains only the best 200 rather
+// than sorting all matches. Empty queries return the first 200 records in
+// original order.
 func (i *Index) Search(ctx context.Context, query string) []Record {
 	if i == nil {
 		return nil
@@ -156,7 +161,7 @@ func (i *Index) Search(ctx context.Context, query string) []Record {
 }
 
 func scoreRecord(record *indexedRecord, tokens []string) (int, bool) {
-	fields := [...]string{record.title, record.subtitle, record.category, record.id}
+	fields := [...]string{record.title, record.subtitle, record.category, record.id, record.searchText}
 	score := 0
 	for _, token := range tokens {
 		best := 0

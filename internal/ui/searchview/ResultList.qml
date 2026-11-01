@@ -22,7 +22,7 @@ FocusScope {
     function move(delta) {
         select(Math.max(0, Math.min(list.count - 1, info.selected_index + delta)))
     }
-    function activate() { command("activate") }
+    function activate() { if (info.activation_enabled) command("activate") }
     function inspect() {
         command("icons-stats")
         const rows = []
@@ -75,6 +75,9 @@ FocusScope {
             highlighted: index === root.info.selected_index
             enabled: !root.info.loading
             focusPolicy: Qt.NoFocus
+            background: Rectangle {
+                color: row.highlighted ? row.palette.highlight : "transparent"
+            }
             contentItem: Row {
                 spacing: 10
                 Image {
@@ -93,8 +96,9 @@ FocusScope {
                     anchors.verticalCenter: parent.verticalCenter
                     Label {
                         width: parent.width
-                        text: row.title + "  ·  " + row.category
+                        text: row.title + (row.category ? "  ·  " + row.category : "")
                         textFormat: Text.PlainText
+                        color: row.palette.text
                         elide: Text.ElideRight
                     }
                     Label {
@@ -102,6 +106,7 @@ FocusScope {
                         text: row.subtitle + "  [" + row.recordID + "]"
                         textFormat: Text.PlainText
                         font.pixelSize: 12
+                        color: row.palette.text
                         elide: Text.ElideRight
                     }
                 }

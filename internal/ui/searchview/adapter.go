@@ -44,6 +44,7 @@ type snapshot struct {
 	LatencyMS         float64      `json:"latency_ms"`
 	Work              search.Stats `json:"work"`
 	Icons             icons.Stats  `json:"icons"`
+	ActivationEnabled bool         `json:"activation_enabled"`
 }
 
 // Adapter owns models and the search controller. All methods run on the GUI thread.
@@ -73,7 +74,8 @@ func Install(
 	}
 	a := &Adapter{
 		state: qt.NewQAbstractListModel(), rows: qt.NewQAbstractListModel(),
-		root: qt.NewQModelIndex(), activate: activate, value: snapshot{SelectedIndex: -1},
+		root: qt.NewQModelIndex(), activate: activate,
+		value: snapshot{SelectedIndex: -1, ActivationEnabled: activate != nil},
 		icons: source,
 	}
 	if find == nil {
@@ -127,7 +129,7 @@ func Install(
 			}
 			a.selectRow(command.Index)
 		case "activate":
-			if a.value.Loading || a.value.SelectedIndex < 0 {
+			if a.activate == nil || a.value.Loading || a.value.SelectedIndex < 0 {
 				return false
 			}
 			a.value.ActivatedID = a.value.SelectedID
