@@ -8,6 +8,19 @@ ApplicationWindow {
     title: "runix"
     flags: Qt.Window | Qt.FramelessWindowHint
     onClosing: Qt.quit()
+    property var launchInfo: ({busy: false, status: ""})
+    Repeater {
+        id: launchRepeater
+        model: launchState
+        delegate: Item {
+            readonly property var info: JSON.parse(model.snapshot)
+            onInfoChanged: window.launchInfo = info
+            Connections {
+                target: window
+                function onVisibleChanged() { model.command = window.visible }
+            }
+        }
+    }
     palette.window: "#202832"
     palette.windowText: "#e8edf2"
     palette.text: palette.windowText
@@ -86,13 +99,20 @@ ApplicationWindow {
                             placeholderTextColor: "#aab6c2"
                             placeholderText: "Search applications"
                             selectByMouse: true
-                            onTextChanged: model.command = JSON.stringify({op: "query", text: text})
+                            text: search.info.query || ""
+                            onTextEdited: model.command = JSON.stringify({op: "query", text: text})
                             Component.onCompleted: {
                                 launcher.query = query
                                 if (window.visible) forceActiveFocus()
                             }
                             Keys.onUpPressed: { if (results.item) results.item.move(-1) }
                             Keys.onDownPressed: { if (results.item) results.item.move(1) }
+                            Keys.onReturnPressed: function(event) {
+                                if (!event.isAutoRepeat && results.item) results.item.activate()
+                            }
+                            Keys.onEnterPressed: function(event) {
+                                if (!event.isAutoRepeat && results.item) results.item.activate()
+                            }
                             Keys.onPressed: function(event) {
                                 if (!results.item) return
                                 if (event.key === Qt.Key_PageDown || event.key === Qt.Key_PageUp) {
@@ -121,10 +141,14 @@ ApplicationWindow {
                             wrapMode: Text.WrapAnywhere
                         }
                         RowLayout {
-                            Button { text: "Launch"; enabled: false }
+                            Button {
+                                text: "Launch"
+                                enabled: search.info.activation_enabled && !search.info.loading && search.info.selected_index >= 0
+                                onClicked: { if (results.item) results.item.activate() }
+                            }
                             Label {
                                 Layout.fillWidth: true
-                                text: "Launching is not available yet."
+                                text: window.launchInfo.status
                                 textFormat: Text.PlainText
                                 wrapMode: Text.Wrap
                             }

@@ -13,6 +13,8 @@ import (
 // Record is a searchable item. ID is the stable identity supplied by callers.
 type Record struct {
 	ID, Title, Subtitle, Category string
+	// CatalogGeneration identifies the immutable source snapshot, independently of query generations.
+	CatalogGeneration uint64
 	// SearchText contains additional non-display text matched by the index.
 	SearchText string
 	// IconName and IconPath are mutually exclusive trusted presentation data.

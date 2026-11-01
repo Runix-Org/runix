@@ -59,7 +59,11 @@ func Run(
 
 	engine := qml.NewQQmlApplicationEngine()
 	source := icons.New(options.IconThemePaths, options.IconThemes)
-	results, err := searchview.Install(engine, find, options.Activate, source)
+	var activate func(string, uint64)
+	if options.Activate != nil {
+		activate = func(id string, _ uint64) { options.Activate(id) }
+	}
+	results, err := searchview.Install(engine, find, activate, source)
 	if err != nil {
 		engine.Delete()
 		return err

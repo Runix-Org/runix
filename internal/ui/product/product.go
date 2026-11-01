@@ -97,7 +97,10 @@ func Run(args []string, options Options) error {
 		}
 		return catalog.Search(queryContext, query)
 	}
-	results, err := searchview.Install(engine, find, nil, icons.New(nil, nil))
+	var launches *launchAdapter
+	results, err := searchview.Install(engine, find, func(id string, generation uint64) {
+		launches.controller.Submit(id, generation)
+	}, icons.New(nil, nil))
 	if err != nil {
 		cancel()
 		engine.Delete()
@@ -113,6 +116,9 @@ func Run(args []string, options Options) error {
 		}
 		stopped = true
 		cancel()
+		if launches != nil {
+			launches.stop()
+		}
 		if lifecycle != nil {
 			lifecycle.Stop()
 		}
@@ -140,6 +146,7 @@ func Run(args []string, options Options) error {
 	if err != nil {
 		return err
 	}
+	launches = installLaunch(engine, results, lifecycle)
 	url := qt.NewQUrl3("qrc:/runix/product/Main.qml")
 	defer url.Delete()
 	engine.LoadData2(document, url)
@@ -166,6 +173,7 @@ func Run(args []string, options Options) error {
 				fmt.Fprintf(os.Stderr, "Load applications: %v\n", loadErr)
 			} else {
 				status = catalog.Status()
+				launches.controller.SetCatalog(catalog)
 				for _, diagnostic := range catalog.Diagnostics() {
 					fmt.Fprintf(os.Stderr, "%s: %s [%s]: %s\n",
 						diagnostic.Code, diagnostic.Path, diagnostic.ID, diagnostic.Message)

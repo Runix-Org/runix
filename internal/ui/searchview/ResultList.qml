@@ -44,8 +44,8 @@ FocusScope {
     }
     Keys.onUpPressed: move(-1)
     Keys.onDownPressed: move(1)
-    Keys.onReturnPressed: activate()
-    Keys.onEnterPressed: activate()
+    Keys.onReturnPressed: function(event) { if (!event.isAutoRepeat) activate() }
+    Keys.onEnterPressed: function(event) { if (!event.isAutoRepeat) activate() }
 
     ListView {
         id: list

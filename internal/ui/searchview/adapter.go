@@ -55,14 +55,15 @@ type Adapter struct {
 	controller *search.Controller
 	records    []search.Record
 	value      snapshot
-	activate   func(string)
+	activate   func(string, uint64)
+	selected   func(string)
 	stopped    bool
 	icons      *icons.Source
 }
 
 // Install exposes searchState, searchRows and the embedded resultListComponent.
 func Install(
-	engine *qml.QQmlApplicationEngine, find search.Find, activate func(string), source *icons.Source,
+	engine *qml.QQmlApplicationEngine, find search.Find, activate func(string, uint64), source *icons.Source,
 ) (*Adapter, error) {
 	component := qml.NewQQmlComponent2(engine.QQmlEngine)
 	component.SetParent(engine.QObject)
@@ -129,13 +130,11 @@ func Install(
 			}
 			a.selectRow(command.Index)
 		case "activate":
-			if a.activate == nil || a.value.Loading || a.value.SelectedIndex < 0 {
+			if a.activate == nil || !a.value.ActivationEnabled || a.value.Loading || a.value.SelectedIndex < 0 {
 				return false
 			}
 			a.value.ActivatedID = a.value.SelectedID
-			if a.activate != nil {
-				a.activate(a.value.SelectedID)
-			}
+			a.activate(a.value.SelectedID, a.records[a.value.SelectedIndex].CatalogGeneration)
 		case "icons-refresh", "icons-theme":
 			a.icons.Refresh(command.Op == "icons-theme")
 			a.rows.BeginResetModel()
@@ -195,6 +194,9 @@ func (a *Adapter) selectRow(index int) {
 	if index >= 0 {
 		a.value.SelectedID = a.records[index].ID
 	}
+	if a.selected != nil {
+		a.selected(a.value.SelectedID)
+	}
 }
 
 func (a *Adapter) apply(update search.Update) {
@@ -230,6 +232,27 @@ func (a *Adapter) publish() {
 	runtime.SetFinalizer(index, nil)
 	defer index.Delete()
 	a.state.DataChanged(index, index)
+}
+
+// SetSelectionHandler observes stable selection changes on the GUI thread.
+func (a *Adapter) SetSelectionHandler(selected func(string)) {
+	a.selected = selected
+}
+
+// SetActivationEnabled changes submission availability without blocking navigation.
+func (a *Adapter) SetActivationEnabled(enabled bool) {
+	a.value.ActivationEnabled = enabled && a.activate != nil
+	a.publish()
+}
+
+// Reset clears query and selection before the next window show.
+func (a *Adapter) Reset() {
+	a.selectRow(-1)
+	a.value.Query = ""
+	a.value.Loading = true
+	a.value.Generation = a.controller.Submit("")
+	a.value.ReceivedMS = time.Now().UnixMilli()
+	a.publish()
 }
 
 // Stop cancels and joins work. The GUI owner must drain callbacks before deleting QML.

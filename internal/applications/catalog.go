@@ -12,6 +12,7 @@ import (
 
 // Catalog is an immutable startup snapshot and its reusable search index.
 type Catalog struct {
+	snapshot    *desktop.Snapshot
 	records     []search.Record
 	index       *search.Index
 	diagnostics []desktop.Diagnostic
@@ -45,7 +46,7 @@ func Load(ctx context.Context, config desktop.CatalogConfig) (*Catalog, error) {
 			}
 		}
 		record := search.Record{
-			ID: app.Source.ID, Title: name, Subtitle: subtitle,
+			ID: app.Source.ID, Title: name, Subtitle: subtitle, CatalogGeneration: snapshot.Generation(),
 			SearchText: strings.Join([]string{
 				entry.Name.Selected, entry.Name.Base, entry.GenericName.Selected,
 				entry.GenericName.Base, strings.Join(entry.Keywords.Selected, " "),
@@ -79,7 +80,9 @@ func Load(ctx context.Context, config desktop.CatalogConfig) (*Catalog, error) {
 			status = "Some applications could not be read"
 		}
 	}
-	return &Catalog{records: records, index: search.NewIndex(records), diagnostics: diagnostics, status: status}, nil
+	return &Catalog{
+		snapshot: snapshot, records: records, index: search.NewIndex(records), diagnostics: diagnostics, status: status,
+	}, nil
 }
 
 func validThemeIcon(value string) bool {
@@ -129,4 +132,20 @@ func (catalog *Catalog) Count() int {
 		return 0
 	}
 	return len(catalog.records)
+}
+
+// Generation returns the desktop snapshot generation, or zero for a nil catalog.
+func (catalog *Catalog) Generation() uint64 {
+	if catalog == nil || catalog.snapshot == nil {
+		return 0
+	}
+	return catalog.snapshot.Generation()
+}
+
+// Lookup returns an independent copy of the desktop record for a stable ID.
+func (catalog *Catalog) Lookup(id string) (desktop.Record, bool) {
+	if catalog == nil || catalog.snapshot == nil {
+		return desktop.Record{}, false
+	}
+	return catalog.snapshot.Lookup(id)
 }

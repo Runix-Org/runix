@@ -22,15 +22,45 @@ var document []byte
 
 // Adapter owns activation state. Stop on the GUI thread before deleting the engine.
 type Adapter struct {
-	engine   *qml.QQmlApplicationEngine
-	object   *qt.QObject
-	ctx      context.Context
-	cancel   context.CancelFunc
-	stopped  atomic.Bool
-	pending  atomic.Bool
-	workers  sync.WaitGroup
-	hyprland bool
-	previous client
+	engine       *qml.QQmlApplicationEngine
+	object       *qt.QObject
+	ctx          context.Context
+	cancel       context.CancelFunc
+	stopped      atomic.Bool
+	pending      atomic.Bool
+	workers      sync.WaitGroup
+	hyprland     bool
+	previousMu   sync.Mutex
+	previous     client
+	activeCancel context.CancelFunc
+	beforeShow   func()
+}
+
+// SetBeforeShow installs a GUI-thread hook called before a hidden window is shown.
+func (a *Adapter) SetBeforeShow(hook func()) {
+	a.beforeShow = hook
+}
+
+// HideAfterLaunch synchronously hides without restoring the previously focused client.
+// It cancels owned activation work so it cannot later show or refocus the window.
+// Call on the GUI thread.
+func (a *Adapter) HideAfterLaunch() bool {
+	if a.stopped.Load() {
+		return false
+	}
+	a.previousMu.Lock()
+	a.previous = client{}
+	if a.activeCancel != nil {
+		a.activeCancel()
+	}
+	a.previousMu.Unlock()
+
+	expression := qml.NewQQmlExpression2(a.engine.RootContext(), a.object, "applyHide()")
+	defer expression.Delete()
+	result := expression.Evaluate()
+	runtime.SetFinalizer(result, nil)
+	defer result.Delete()
+	return !expression.HasError()
 }
 
 // Install exposes launcher before loading the visual tree. Hyprland focus is opt-in.
@@ -90,20 +120,34 @@ func (a *Adapter) Request(command string) bool {
 	if command != "show" && command != "hide" && command != "toggle" {
 		return false
 	}
+	ctx, cancel := context.WithTimeout(a.ctx, 1500*time.Millisecond)
+	a.previousMu.Lock()
 	if a.stopped.Load() || !a.pending.CompareAndSwap(false, true) {
+		a.previousMu.Unlock()
+		cancel()
 		return false
 	}
+	a.activeCancel = cancel
 	a.workers.Add(1)
+	a.previousMu.Unlock()
 	go func() {
 		defer a.workers.Done()
-		defer a.pending.Store(false)
-		ctx, cancel := context.WithTimeout(a.ctx, 1500*time.Millisecond)
-		defer cancel()
-		if err := a.handle(ctx, command); err != nil {
+		defer a.finishActivation()
+		if err := a.handle(ctx, command); err != nil && ctx.Err() == nil {
 			fmt.Fprintln(os.Stderr, err)
 		}
 	}()
 	return true
+}
+
+func (a *Adapter) finishActivation() {
+	a.previousMu.Lock()
+	if a.activeCancel != nil {
+		a.activeCancel()
+		a.activeCancel = nil
+	}
+	a.pending.Store(false)
+	a.previousMu.Unlock()
 }
 
 // Stop cancels requests and joins only adapter-owned workers, never GUI callbacks.
@@ -127,7 +171,17 @@ func (a *Adapter) gui(ctx context.Context, command string) (bool, error) {
 		if a.stopped.Load() || ctx.Err() != nil {
 			return
 		}
-		// Only fixed expressions are evaluated; no client text becomes source.
+		if command == "show" && a.beforeShow != nil {
+			visible := qml.NewQQmlExpression2(a.engine.RootContext(), a.object, "window.visible")
+			state := visible.Evaluate()
+			runtime.SetFinalizer(state, nil)
+			wasVisible := !visible.HasError() && state.ToBool()
+			state.Delete()
+			visible.Delete()
+			if !wasVisible {
+				a.beforeShow()
+			}
+		}
 		source := "window.visible"
 		switch command {
 		case "show":
@@ -159,14 +213,22 @@ func (a *Adapter) Handle(parent context.Context, command string) error {
 	if command != "show" && command != "hide" && command != "toggle" {
 		return errors.New("unknown activation command")
 	}
+	ctx, cancel := context.WithCancel(parent)
+	a.previousMu.Lock()
 	if a.stopped.Load() {
+		a.previousMu.Unlock()
+		cancel()
 		return errors.New("launcher is stopping")
 	}
 	if !a.pending.CompareAndSwap(false, true) {
+		a.previousMu.Unlock()
+		cancel()
 		return errors.New("launcher activation is busy")
 	}
-	defer a.pending.Store(false)
-	return a.handle(parent, command)
+	a.activeCancel = cancel
+	a.previousMu.Unlock()
+	defer a.finishActivation()
+	return a.handle(ctx, command)
 }
 
 func (a *Adapter) handle(parent context.Context, command string) error {
@@ -192,7 +254,9 @@ func (a *Adapter) handle(parent context.Context, command string) error {
 	}
 	if show {
 		if !visible {
+			a.previousMu.Lock()
 			a.previous = active
+			a.previousMu.Unlock()
 		}
 		if _, err = a.gui(ctx, "show"); err != nil {
 			return err
@@ -205,8 +269,10 @@ func (a *Adapter) handle(parent context.Context, command string) error {
 	if _, err = a.gui(ctx, "hide"); err != nil {
 		return err
 	}
+	a.previousMu.Lock()
 	previous := a.previous
 	a.previous = client{}
+	a.previousMu.Unlock()
 	if focusErr != nil {
 		return focusErr
 	}
