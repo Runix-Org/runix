@@ -255,6 +255,34 @@ func (a *Adapter) Reset() {
 	a.publish()
 }
 
+// RefreshCatalog reruns the current query after the owner publishes a new catalog.
+// Existing rows remain visible but cannot be activated while the new projection applies.
+func (a *Adapter) RefreshCatalog(invalidateIcons bool) {
+	if a.stopped {
+		return
+	}
+	if invalidateIcons {
+		a.icons.Refresh(false)
+		a.rows.BeginResetModel()
+		a.rows.EndResetModel()
+	}
+	a.value.Loading = true
+	a.value.Generation = a.controller.Submit(a.value.Query)
+	a.value.ReceivedMS = time.Now().UnixMilli()
+	a.publish()
+}
+
+// RefreshIcons invalidates icon URLs and asks the row model to resolve them again.
+func (a *Adapter) RefreshIcons() {
+	if a.stopped {
+		return
+	}
+	a.icons.Refresh(false)
+	a.rows.BeginResetModel()
+	a.rows.EndResetModel()
+	a.publish()
+}
+
 // Stop cancels and joins work. The GUI owner must drain callbacks before deleting QML.
 func (a *Adapter) Stop() {
 	if a.stopped {

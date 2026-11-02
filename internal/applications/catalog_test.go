@@ -42,6 +42,30 @@ func (s *CatalogSuite) TestProjectionSearchAndIconFallback() {
 	s.Equal("Nom", catalog.Records()[0].Title)
 }
 
+func (s *CatalogSuite) TestSearchIndexReuseKeepsCurrentCatalogGeneration() {
+	root := s.T().TempDir()
+	path := filepath.Join(root, "app.desktop")
+	write := func(exec string) {
+		s.Require().NoError(os.WriteFile(path, []byte(
+			"[Desktop Entry]\nType=Application\nName=Same Name\nExec="+exec+"\n"), 0o600))
+	}
+	write("/bin/true")
+	firstSnapshot, err := desktop.Discover(context.Background(), desktop.CatalogConfig{Roots: []string{root}}, 3)
+	s.Require().NoError(err)
+	first := Project(firstSnapshot, nil)
+	write("/bin/false")
+	secondSnapshot, err := desktop.Discover(context.Background(), desktop.CatalogConfig{Roots: []string{root}}, 4)
+	s.Require().NoError(err)
+	second := Project(secondSnapshot, first)
+	s.Same(first.index, second.index)
+	results := second.Search(context.Background(), "same name")
+	s.Require().Len(results, 1)
+	s.Equal(uint64(4), results[0].CatalogGeneration)
+	entry, ok := second.Lookup("app.desktop")
+	s.Require().True(ok)
+	s.Equal("/bin/false", entry.Entry.Exec.Raw)
+}
+
 func (s *CatalogSuite) TestEmptySnapshotAndCancellation() {
 	root := s.T().TempDir()
 	catalog, err := Load(context.Background(), desktop.CatalogConfig{Roots: []string{root}})

@@ -135,9 +135,17 @@ func cloneRecord(record Record) Record {
 
 // Discover returns no snapshot on cancellation. Callers publish only a successful replacement.
 func Discover(ctx context.Context, config CatalogConfig, generation uint64) (*Snapshot, error) {
+	return discover(ctx, config, generation, nil, nil, nil)
+}
+
+func discover(ctx context.Context, config CatalogConfig, generation uint64,
+	cache map[string]cachedParse, graph *watchGraph, parsed *uint64,
+) (*Snapshot, error) {
 	scan := catalogScan{ctx: ctx, config: config, snapshot: &Snapshot{
 		generation: generation, records: make(map[string]Record), diagnostics: slices.Clone(config.Diagnostics),
 	}}
+	scan.cache, scan.graph, scan.parsed = cache, graph, parsed
+	scan.used = make(map[string]struct{})
 	for _, root := range cleanRoots(config.Roots) {
 		if !filepath.IsAbs(root) {
 			scan.diagnostic("invalid-root", root, "", "Application roots must be absolute")
@@ -149,6 +157,11 @@ func Discover(ctx context.Context, config CatalogConfig, generation uint64) (*Sn
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
+	}
+	for path := range cache {
+		if _, retained := scan.used[path]; !retained {
+			delete(cache, path)
+		}
 	}
 	// Fold once rather than in every sort comparison.
 	names := make(map[string]string, len(scan.snapshot.visible))

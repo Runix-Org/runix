@@ -10,24 +10,34 @@ import (
 	"runix/internal/search"
 )
 
-// Catalog is an immutable startup snapshot and its reusable search index.
+// Catalog is an immutable versioned lookup and its reusable search index.
 type Catalog struct {
 	snapshot    *desktop.Snapshot
 	records     []search.Record
+	byID        map[string]search.Record
 	index       *search.Index
 	diagnostics []desktop.Diagnostic
 	status      string
 }
 
-// Load discovers and projects applications synchronously. Callers that need to
-// keep a GUI responsive should invoke it in a background goroutine.
+// Load discovers and projects applications synchronously.
 func Load(ctx context.Context, config desktop.CatalogConfig) (*Catalog, error) {
 	snapshot, err := desktop.Discover(ctx, config, 1)
 	if err != nil {
 		return nil, err
 	}
+	return Project(snapshot, nil), nil
+}
+
+// Project converts a completed desktop snapshot into an immutable application catalog.
+// It reuses the previous search index when searchable fields are unchanged.
+func Project(snapshot *desktop.Snapshot, previous *Catalog) *Catalog {
+	if previous != nil && previous.snapshot == snapshot {
+		return previous
+	}
 	desktopRecords := snapshot.Applications()
 	records := make([]search.Record, 0, len(desktopRecords))
+	byID := make(map[string]search.Record, len(desktopRecords))
 	for _, app := range desktopRecords {
 		entry := app.Entry
 		name := entry.Name.Selected
@@ -53,20 +63,23 @@ func Load(ctx context.Context, config desktop.CatalogConfig) (*Catalog, error) {
 				strings.Join(entry.Keywords.Base, " "), app.Source.ID,
 			}, " "),
 		}
-		if icon := entry.Icon.Selected; icon != "" {
-			if filepath.IsAbs(icon) && !strings.ContainsRune(icon, '\x00') {
-				record.IconPath = icon
-			} else if validThemeIcon(icon) {
-				record.IconName = icon
-			}
-		} else if icon := entry.Icon.Base; icon != "" {
-			if filepath.IsAbs(icon) && !strings.ContainsRune(icon, '\x00') {
-				record.IconPath = icon
-			} else if validThemeIcon(icon) {
-				record.IconName = icon
-			}
+		icon := entry.Icon.Selected
+		if icon == "" {
+			icon = entry.Icon.Base
+		}
+		if filepath.IsAbs(icon) && !strings.ContainsRune(icon, '\x00') {
+			record.IconPath = icon
+		} else if validThemeIcon(icon) {
+			record.IconName = icon
 		}
 		records = append(records, record)
+		byID[record.ID] = record
+	}
+	index := (*search.Index)(nil)
+	if previous != nil && sameSearchableRecords(previous.records, records) {
+		index = previous.index
+	} else {
+		index = search.NewIndex(records)
 	}
 	diagnostics := snapshot.Diagnostics()
 	status := "Applications loaded"
@@ -81,8 +94,22 @@ func Load(ctx context.Context, config desktop.CatalogConfig) (*Catalog, error) {
 		}
 	}
 	return &Catalog{
-		snapshot: snapshot, records: records, index: search.NewIndex(records), diagnostics: diagnostics, status: status,
-	}, nil
+		snapshot: snapshot, records: records, byID: byID, index: index, diagnostics: diagnostics, status: status,
+	}
+}
+
+func sameSearchableRecords(left, right []search.Record) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for i := range left {
+		if left[i].ID != right[i].ID || left[i].Title != right[i].Title ||
+			left[i].Subtitle != right[i].Subtitle || left[i].Category != right[i].Category ||
+			left[i].SearchText != right[i].SearchText {
+			return false
+		}
+	}
+	return true
 }
 
 func validThemeIcon(value string) bool {
@@ -107,7 +134,11 @@ func (catalog *Catalog) Search(ctx context.Context, query string) []search.Recor
 	if catalog == nil {
 		return nil
 	}
-	return catalog.index.Search(ctx, query)
+	matches := catalog.index.Search(ctx, query)
+	for i := range matches {
+		matches[i] = catalog.byID[matches[i].ID]
+	}
+	return matches
 }
 
 // Status is a short user-facing summary of the snapshot.

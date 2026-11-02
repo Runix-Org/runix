@@ -8,6 +8,7 @@ import (
 	"os"
 	"runtime"
 	"sync"
+	"sync/atomic"
 
 	"runix/internal/activation"
 	"runix/internal/applications"
@@ -47,10 +48,12 @@ func Run(args []string, options Options) error {
 	qt.QGuiApplication_SetQuitOnLastWindowClosed(false)
 	engine := qml.NewQQmlApplicationEngine()
 	ctx, cancel := context.WithCancel(context.Background())
-	var workers sync.WaitGroup
-	ready := make(chan struct{})
-	var catalog *applications.Catalog
-	var loadErr error
+	var catalog atomic.Pointer[applications.Catalog]
+	var deliveryMu sync.Mutex
+	deliveryScheduled := false
+	pendingCatalog := false
+	pendingIcons := false
+	var live *desktop.Live
 	stopped := false
 	status := "Loading applications…"
 	loading := true
@@ -90,15 +93,19 @@ func Run(args []string, options Options) error {
 		select {
 		case <-queryContext.Done():
 			return nil
-		case <-ready:
+		default:
 		}
-		if catalog == nil {
+		current := catalog.Load()
+		if current == nil {
 			return nil
 		}
-		return catalog.Search(queryContext, query)
+		return current.Search(queryContext, query)
 	}
 	var launches *launchAdapter
 	results, err := searchview.Install(engine, find, func(id string, generation uint64) {
+		deliveryMu.Lock()
+		defer deliveryMu.Unlock()
+		launches.controller.SetCatalog(catalog.Load())
 		launches.controller.Submit(id, generation)
 	}, icons.New(nil, nil))
 	if err != nil {
@@ -116,6 +123,9 @@ func Run(args []string, options Options) error {
 		}
 		stopped = true
 		cancel()
+		if live != nil {
+			live.Close()
+		}
 		if launches != nil {
 			launches.stop()
 		}
@@ -125,7 +135,6 @@ func Run(args []string, options Options) error {
 		stopSocket()
 		stopWindow()
 		results.Stop()
-		workers.Wait()
 		qt.QCoreApplication_SendPostedEvents2(nil, int(qt.QEvent__MetaCall))
 	}
 	defer func() {
@@ -159,30 +168,55 @@ func Run(args []string, options Options) error {
 	}
 	stopSocket = socketCleanup
 	config := desktop.ReadCatalogConfig(os.Getenv)
-	workers.Go(func() {
-		catalog, loadErr = applications.Load(ctx, config)
-		close(ready)
+	live = desktop.StartLive(ctx, config, func(update desktop.Update) {
+		previous := catalog.Load()
+		current := applications.Project(update.Snapshot, previous)
+		deliveryMu.Lock()
+		catalog.Store(current)
+		catalogChanged := previous == nil || current.Generation() != previous.Generation()
+		if current == previous && len(update.InvalidatedIcons) == 0 {
+			deliveryMu.Unlock()
+			return
+		}
+		pendingCatalog = pendingCatalog || catalogChanged
+		pendingIcons = pendingIcons || len(update.InvalidatedIcons) != 0
+		if deliveryScheduled {
+			deliveryMu.Unlock()
+			return
+		}
+		deliveryScheduled = true
+		deliveryMu.Unlock()
 		mainthread.Start(func() {
+			deliveryMu.Lock()
+			catalogChanged := pendingCatalog
+			iconsChanged := pendingIcons
+			pendingCatalog = false
+			pendingIcons = false
+			deliveryScheduled = false
+			deliveryMu.Unlock()
 			if stopped {
 				return
 			}
+			current := catalog.Load()
+			if current == nil {
+				return
+			}
 			loading = false
-			failed = loadErr != nil
-			if loadErr != nil {
-				status = "Cannot load applications. See stderr for details."
-				fmt.Fprintf(os.Stderr, "Load applications: %v\n", loadErr)
-			} else {
-				status = catalog.Status()
-				launches.controller.SetCatalog(catalog)
-				for _, diagnostic := range catalog.Diagnostics() {
-					fmt.Fprintf(os.Stderr, "%s: %s [%s]: %s\n",
-						diagnostic.Code, diagnostic.Path, diagnostic.ID, diagnostic.Message)
-				}
+			failed = false
+			status = current.Status()
+			launches.controller.SetCatalog(current)
+			if catalogChanged {
+				results.RefreshCatalog(iconsChanged)
+			} else if iconsChanged {
+				results.RefreshIcons()
+			}
+			for _, diagnostic := range current.Diagnostics() {
+				fmt.Fprintf(os.Stderr, "%s: %s [%s]: %s\n",
+					diagnostic.Code, diagnostic.Path, diagnostic.ID, diagnostic.Message)
 			}
 			parent := qt.NewQModelIndex()
 			defer parent.Delete()
 			index := state.Index(0, 0, parent)
-			// MIQT attaches a finalizer; cancel it before deterministic GUI-thread deletion.
 			runtime.SetFinalizer(index, nil)
 			defer index.Delete()
 			state.DataChanged(index, index)

@@ -2,6 +2,7 @@ package desktop
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"io"
 	"io/fs"
@@ -24,6 +25,18 @@ type catalogScan struct {
 	snapshot *Snapshot
 	visited  int
 	limited  bool
+	cache    map[string]cachedParse
+	used     map[string]struct{}
+	graph    *watchGraph
+	parsed   *uint64
+}
+
+type cachedParse struct {
+	digest   [32]byte
+	record   Record
+	parseErr error
+	changed  bool
+	oldIcon  string
 }
 
 func (scan *catalogScan) root(root string) error {
@@ -33,6 +46,7 @@ func (scan *catalogScan) root(root string) error {
 	if scan.limited {
 		return nil
 	}
+	scan.graph.observe(root)
 	// A missing root is normal; a root that is itself a broken link is not.
 	if _, err := os.Lstat(root); err != nil {
 		if !errors.Is(err, fs.ErrNotExist) {
@@ -73,6 +87,7 @@ func (scan *catalogScan) walk(root, relative string, ancestors []os.FileInfo, ca
 		return err
 	}
 	path := filepath.Join(root, relative)
+	scan.graph.observe(path)
 	info, err := os.Stat(path)
 	if err != nil {
 		scan.failure("resolve", path, "", err)
@@ -84,6 +99,7 @@ func (scan *catalogScan) walk(root, relative string, ancestors []os.FileInfo, ca
 		}
 		return nil
 	}
+	scan.graph.directory(path)
 	for _, ancestor := range ancestors {
 		if os.SameFile(ancestor, info) {
 			scan.diagnostic("directory-cycle", path, "", "Directory links point to an ancestor")
@@ -172,15 +188,30 @@ func (scan *catalogScan) candidate(source Source) bool {
 		scan.failure("read-file", source.Path, source.ID, errors.Join(readErr, closeErr))
 		return false
 	}
-	record := Record{Source: source, ResolvedPath: resolved}
-	entry, parseErr := Parse(data, source, scan.config.Environment)
-	if parseErr != nil {
-		scan.failure("parse", source.Path, source.ID, parseErr)
+	digest := sha256.Sum256(data)
+	cached, hit := scan.cache[source.Path]
+	if !hit || cached.digest != digest || cached.record.ResolvedPath != resolved {
+		entry, parseErr := Parse(data, source, scan.config.Environment)
+		cached = cachedParse{digest: digest, record: Record{
+			Source: source, ResolvedPath: resolved, Entry: entry, Valid: parseErr == nil,
+		}, parseErr: parseErr, changed: true, oldIcon: cached.record.Entry.Icon.Selected}
+		if scan.cache != nil {
+			scan.cache[source.Path] = cached
+			scan.used[source.Path] = struct{}{}
+		}
+		if scan.parsed != nil {
+			*scan.parsed++
+		}
+	} else if scan.used != nil {
+		scan.used[source.Path] = struct{}{}
+	}
+	record := cached.record
+	if cached.parseErr != nil {
+		scan.failure("parse", source.Path, source.ID, cached.parseErr)
 	} else {
-		record.Entry = entry
-		record.Valid = true
-		record.Visible = entry.Disposition == Visible
-		if record.Visible && entry.TryExec != "" && !availableExecutable(entry.TryExec, scan.config.Path) {
+		record.Visible = record.Entry.Disposition == Visible
+		if record.Visible && record.Entry.TryExec != "" &&
+			!availableExecutable(record.Entry.TryExec, scan.config.Path) {
 			record.Visible = false
 			scan.diagnostic("try-exec", source.Path, source.ID, "TryExec is not an available executable")
 		}
