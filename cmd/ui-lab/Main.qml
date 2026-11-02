@@ -409,6 +409,18 @@ ApplicationWindow {
                 function onConstrainedSizeChanged() {
                     if (windowPolicy.attached && window.visible) model.request = windowPolicy.constrainedSize
                 }
+                function onAttachedChanged() {
+                    if (windowPolicy.attached && window.visible) model.request = windowPolicy.constrainedSize
+                }
+            }
+            Connections {
+                target: window
+                function onVisibleChanged() {
+                    if (windowPolicy.attached && window.visible) model.request = windowPolicy.constrainedSize
+                }
+                function onDevicePixelRatioChanged() {
+                    if (windowPolicy.attached && window.visible) model.request = windowPolicy.constrainedSize
+                }
             }
         }
     }

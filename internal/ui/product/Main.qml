@@ -21,12 +21,14 @@ ApplicationWindow {
             }
         }
     }
-    palette.window: "#202832"
-    palette.windowText: "#e8edf2"
-    palette.text: palette.windowText
-    palette.buttonText: palette.windowText
+    readonly property color themeForeground: "#e8edf2"
+    readonly property color themeSurface: "#202832"
+    palette.window: themeSurface
+    palette.windowText: themeForeground
+    palette.text: themeForeground
+    palette.buttonText: themeForeground
     palette.base: "#151c23"
-    palette.button: palette.window
+    palette.button: themeSurface
     palette.highlight: "#38618a"
     Component.onCompleted: {
         windowPolicy.attach(window)
@@ -55,6 +57,7 @@ ApplicationWindow {
             Connections {
                 target: window
                 function onVisibleChanged() { requestSize() }
+                function onDevicePixelRatioChanged() { requestSize() }
             }
         }
     }

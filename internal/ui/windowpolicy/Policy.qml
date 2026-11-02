@@ -30,6 +30,7 @@ QtObject {
 
     function attach(target) {
         window = target
+        window.objectName = "runix-policy-window"
         window.minimumWidth = Qt.binding(function() { return policy.minimumWidth })
         window.minimumHeight = Qt.binding(function() { return policy.minimumHeight })
         window.maximumWidth = Qt.binding(function() { return policy.maximumWidth })

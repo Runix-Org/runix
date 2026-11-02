@@ -2,20 +2,26 @@
 package cli
 
 import (
+	"context"
 	"os"
 
+	"runix/internal/desktopintegration"
 	"runix/internal/ui/product"
 )
 
 // Command configures the product launcher.
 type Command struct {
-	ActivationSocket string `help:"Use this private activation socket path." placeholder:"PATH"`
-	StartHidden      bool   `help:"Start hidden and wait for activation."`
-	HyprlandWindow   bool   `help:"Use Hyprland window sizing, placement, and focus."`
+	ActivationSocket          string `help:"Use this private activation socket path." placeholder:"PATH"`
+	StartHidden               bool   `help:"Start hidden and wait for activation."`
+	DisableDesktopIntegration bool   `help:"Disable desktop window integration and use standard Qt behavior."`
 }
 
 // Run prepares the activation endpoint and runs the product until it quits.
 func (command *Command) Run() error {
+	integration, err := desktopintegration.Detect(context.Background(), command.DisableDesktopIntegration)
+	if err != nil {
+		return err
+	}
 	endpoint := command.ActivationSocket
 	cleanup := func() {}
 	if endpoint == "" {
@@ -29,6 +35,6 @@ func (command *Command) Run() error {
 	return product.Run([]string{os.Args[0]}, product.Options{
 		ActivationSocket: endpoint,
 		StartHidden:      command.StartHidden,
-		HyprlandWindow:   command.HyprlandWindow,
+		WindowControl:    integration.WindowControl,
 	})
 }

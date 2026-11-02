@@ -31,7 +31,7 @@ var document []byte
 type Options struct {
 	ActivationSocket string
 	StartHidden      bool
-	HyprlandWindow   bool
+	WindowControl    bool
 }
 
 // Run owns the GUI thread and startup scan until explicit Quit or native close.
@@ -146,27 +146,27 @@ func Run(args []string, options Options) error {
 	if err = windowpolicy.Install(engine); err != nil {
 		return err
 	}
-	windowCleanup, err := windowpolicy.InstallHyprland(engine, options.HyprlandWindow)
+	windowCleanup, err := windowpolicy.InstallHyprland(engine, options.WindowControl)
 	if err != nil {
 		return err
 	}
 	stopWindow = windowCleanup
-	lifecycle, err = launcher.Install(engine, options.HyprlandWindow, options.StartHidden)
+	lifecycle, err = launcher.Install(engine, options.WindowControl, options.StartHidden)
 	if err != nil {
 		return err
 	}
 	launches = installLaunch(engine, results, lifecycle)
+	socketCleanup, err := activation.Listen(options.ActivationSocket, lifecycle.Handle)
+	if err != nil {
+		return err
+	}
+	stopSocket = socketCleanup
 	url := qt.NewQUrl3("qrc:/runix/product/Main.qml")
 	defer url.Delete()
 	engine.LoadData2(document, url)
 	if len(engine.RootObjects()) == 0 {
 		return fmt.Errorf("load launcher QML: no root object; see Qt errors above")
 	}
-	socketCleanup, err := activation.Listen(options.ActivationSocket, lifecycle.Handle)
-	if err != nil {
-		return err
-	}
-	stopSocket = socketCleanup
 	config := desktop.ReadCatalogConfig(os.Getenv)
 	live = desktop.StartLive(ctx, config, func(update desktop.Update) {
 		previous := catalog.Load()

@@ -2,7 +2,9 @@ package windowpolicy
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"os/exec"
 	"runtime"
@@ -24,11 +26,8 @@ type dimensions struct{ width, height int }
 
 // InstallHyprland exposes a bounded size-request model. Disabled mode never invokes IPC.
 // The returned stop function must run before deleting the engine, on the GUI thread.
-// Enabled mode requires Hyprland's Lua IPC and unit QT_SCALE_FACTOR.
+// Enabled mode requires Hyprland's Lua IPC.
 func InstallHyprland(engine *qml.QQmlApplicationEngine, enabled bool) (func(), error) {
-	if enabled && os.Getenv("QT_SCALE_FACTOR") != "" && os.Getenv("QT_SCALE_FACTOR") != "1" {
-		return nil, fmt.Errorf("set QT_SCALE_FACTOR=1 to use Hyprland window control")
-	}
 	ctx, cancel := context.WithCancel(context.Background())
 	requests := make(chan dimensions, 1)
 	var workers sync.WaitGroup
@@ -71,6 +70,21 @@ func InstallHyprland(engine *qml.QQmlApplicationEngine, enabled bool) (func(), e
 			return false
 		}
 		next := requestedDimensions(value)
+		// QWindow DPR includes application scaling and Wayland fractional scaling.
+		// Screen DPR alone can differ from the actual surface's fractional ratio.
+		found := false
+		for _, window := range qt.QGuiApplication_TopLevelWindows() {
+			if window.ObjectName() == "runix-policy-window" {
+				ratio := window.DevicePixelRatio()
+				next.width = int(math.Round(float64(next.width) * ratio))
+				next.height = int(math.Round(float64(next.height) * ratio))
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
 		if next.width < 1 || next.height < 1 {
 			return false
 		}
@@ -93,6 +107,10 @@ func InstallHyprland(engine *qml.QQmlApplicationEngine, enabled bool) (func(), e
 					return
 				case size := <-requests:
 					text := resizeHyprland(ctx, size)
+					if strings.HasPrefix(text, "Hyprland resize failed:") {
+						fmt.Fprintln(os.Stderr, text+
+							"; check the session and hyprctl, or restart without desktop integration")
+					}
 					mainthread.Start(func() {
 						if !stopping {
 							publish(text)
@@ -118,11 +136,21 @@ func InstallHyprland(engine *qml.QQmlApplicationEngine, enabled bool) (func(), e
 func resizeHyprland(parent context.Context, size dimensions) string {
 	ctx, cancel := context.WithTimeout(parent, 2*time.Second)
 	defer cancel()
+	// QML visibility precedes compositor mapping. Do not lose the initial size request.
+	if err := waitForMapping(ctx); err != nil {
+		return fmt.Sprintf("Hyprland resize failed: %v", err)
+	}
+	// Convert surface pixels into the current output's compositor logical units.
 	// Integers and our own PID only: no QML text is evaluated as Lua or shell code.
 	code := fmt.Sprintf(
-		`hl.dispatch(hl.dsp.window.resize({x=%d,y=%d,relative=false,window="pid:%d"})); `+
-			`hl.dispatch(hl.dsp.window.center({window="pid:%d"}))`,
-		size.width, size.height, os.Getpid(), os.Getpid(),
+		`local w=hl.get_window("pid:%d"); `+
+			`if not w or not w.mapped or not w.monitor then error("runix window is not mapped") end; `+
+			`local s=w.monitor.scale; `+
+			`hl.dispatch(hl.dsp.window.float({action="set",window=w})); `+
+			`hl.dispatch(hl.dsp.window.resize({x=math.floor(%d/s+0.5),y=math.floor(%d/s+0.5),`+
+			`relative=false,window=w})); `+
+			`hl.dispatch(hl.dsp.window.center({window=w}))`,
+		os.Getpid(), size.width, size.height,
 	)
 	output, err := exec.CommandContext(ctx, "hyprctl", "eval", code).CombinedOutput()
 	if err != nil {
@@ -132,6 +160,34 @@ func resizeHyprland(parent context.Context, size dimensions) string {
 		return "Hyprland resize failed: " + strings.TrimSpace(string(output))
 	}
 	return "Hyprland command accepted; compare observed geometry"
+}
+
+func waitForMapping(ctx context.Context) error {
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		output, err := exec.CommandContext(ctx, "hyprctl", "-j", "clients").Output()
+		if err != nil {
+			return fmt.Errorf("read Hyprland windows: %w", err)
+		}
+		var clients []struct {
+			PID    int  `json:"pid"`
+			Mapped bool `json:"mapped"`
+		}
+		if err = json.Unmarshal(output, &clients); err != nil {
+			return fmt.Errorf("decode Hyprland windows: %w", err)
+		}
+		for _, client := range clients {
+			if client.PID == os.Getpid() && client.Mapped {
+				return nil
+			}
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+		}
+	}
 }
 
 // requestedDimensions copies the size before releasing MIQT's value-return wrapper.
