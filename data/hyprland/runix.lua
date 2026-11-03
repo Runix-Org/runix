@@ -49,6 +49,10 @@ local function safe_call(fn, ...)
     return true, result
 end
 
+local function shell_quote(value)
+    return "'" .. value:gsub("'", "'\\''") .. "'"
+end
+
 function M.setup(options)
     options = options or {}
     if type(options) ~= "table" then error("options must be a table") end
@@ -81,6 +85,43 @@ function M.setup(options)
     }
     _G.runix_hotkeys = module
 
+    local function notify(message)
+        if hl.notification and hl.notification.create then
+            pcall(hl.notification.create, { text = message, timeout = 8000, icon = "error" })
+        end
+    end
+
+    local function spawn(arguments)
+        local command = shell_quote(module.executable) .. " " .. arguments
+        command = command .. " || hyprctl notify 3 8000 0 " ..
+            shell_quote("Runix command failed. Check the executable and run runix hotkeys status.")
+        local ok, result = safe_call(hl.exec_cmd, command)
+        if not ok then
+            notify("Could not start runix: " .. tostring(result))
+            error(result)
+        end
+    end
+
+    options.on_toggle = options.on_toggle or function() spawn("cmd full") end
+    options.on_ready = options.on_ready or function(epoch)
+        spawn("hotkeys restore --epoch " .. shell_quote(epoch))
+    end
+
+    local function schedule_recovery()
+        local pending = module.pending
+        local ok, timer = safe_call(hl.timer, function()
+            if module._active and module.pending == pending then
+                local launched, err = pcall(spawn, "hotkeys restore --epoch " .. shell_quote(module.epoch))
+                if not launched then notify("Runix hotkey recovery failed: " .. tostring(err)) end
+            end
+        end, { timeout = 2500, type = "oneshot" })
+        if ok and timer then
+            module.recovery_timer = timer
+        else
+            notify("Could not schedule runix hotkey recovery.")
+        end
+    end
+
     local function error_object(code, message)
         return { code = code, message = message }
     end
@@ -109,6 +150,7 @@ function M.setup(options)
             ready = module.ready, executable = module.executable, path = os.getenv("PATH") or "",
             toggle_available = type(options.on_toggle) == "function", bindings = bindings,
             pending = module.pending and module.pending.new_handle or "", error = error,
+            pending_removal = module.pending and module.pending.removal == true or false,
         }
     end
 
@@ -150,7 +192,7 @@ function M.setup(options)
         end
         if type(request.op) ~= "string" then return error_object("invalid_request", "op must be a string") end
         if request.op ~= "status" and request.op ~= "create" and request.op ~= "replace"
-            and request.op ~= "remove" and request.op ~= "rollback" and request.op ~= "commit" then
+            and request.op ~= "remove" and request.op ~= "suspend" and request.op ~= "rollback" and request.op ~= "commit" then
             return error_object("invalid_request", "Unknown operation")
         end
         local needs_handle = request.op ~= "status" and request.op ~= "create"
@@ -226,6 +268,7 @@ function M.setup(options)
             if not handle then return respond(create_error) end
             module.pending = { new_handle = handle, old_handle = nil }
             module.revision = module.revision + 1
+            schedule_recovery()
         elseif op == "replace" then
             local old = module.bindings[request.handle]
             if not old then return respond(error_object("missing_handle", "Owned binding handle was not found")) end
@@ -234,11 +277,24 @@ function M.setup(options)
             if not handle then return respond(create_error) end
             module.pending = { new_handle = handle, old_handle = request.handle }
             module.revision = module.revision + 1
+            schedule_recovery()
             local disabled, disable_error = safe_call(old.object.set_enabled, old.object, false)
             if not disabled then return respond(error_object("runtime_error", "Could not disable old binding: " .. tostring(disable_error))) end
             local verified, current = safe_call(old.object.is_enabled, old.object)
             if not verified or current ~= false then
                 return respond(error_object("runtime_error", "Could not verify old binding is disabled"))
+            end
+        elseif op == "suspend" then
+            local old = module.bindings[request.handle]
+            if not old then return respond(error_object("missing_handle", "Owned binding handle was not found")) end
+            module.pending = { new_handle = request.handle, old_handle = request.handle, removal = true }
+            module.revision = module.revision + 1
+            schedule_recovery()
+            local disabled, disable_error = safe_call(old.object.set_enabled, old.object, false)
+            if not disabled then return respond(error_object("runtime_error", "Could not disable binding: " .. tostring(disable_error))) end
+            local verified, current = safe_call(old.object.is_enabled, old.object)
+            if not verified or current ~= false then
+                return respond(error_object("runtime_error", "Could not verify disabled binding"))
             end
         elseif op == "remove" then
             if not module.bindings[request.handle] then return respond(error_object("missing_handle", "Owned binding handle was not found")) end
@@ -250,7 +306,7 @@ function M.setup(options)
             local pending = module.pending
             if request.handle ~= pending.new_handle then return respond(error_object("invalid_request", "Handle does not match pending transaction")) end
             local new = module.bindings[pending.new_handle]
-            if new then
+            if new and not pending.removal then
                 local valid, enabled = safe_call(new.object.is_enabled, new.object)
                 if not valid then return respond(error_object("runtime_error", "Could not inspect new binding: " .. tostring(enabled))) end
                 if enabled ~= nil then
@@ -279,7 +335,9 @@ function M.setup(options)
             local new = module.bindings[pending.new_handle]
             if not new then return respond(error_object("runtime_error", "Commit cannot verify missing new binding")) end
             local valid, enabled = safe_call(new.object.is_enabled, new.object)
-            if not valid or enabled ~= true then return respond(error_object("runtime_error", "Commit cannot verify active new binding")) end
+            if not valid or enabled ~= (not pending.removal) then
+                return respond(error_object("runtime_error", "Commit cannot verify pending binding state"))
+            end
             if pending.old_handle then
                 local old = module.bindings[pending.old_handle]
                 if not old then return respond(error_object("runtime_error", "Commit cannot verify missing old binding")) end

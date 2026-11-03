@@ -10,6 +10,7 @@ import (
 
 	"runix/internal/commands"
 	"runix/internal/desktopintegration"
+	"runix/internal/hotkeysettings"
 	"runix/internal/ui/product"
 
 	"github.com/alecthomas/kong"
@@ -25,10 +26,31 @@ type Command struct {
 	Control                   struct {
 		Operation string `arg:"" enum:"show,hide,toggle,quit" help:"Change visibility or quit the instance."`
 	} `cmd:"" help:"Control the instance, starting it if absent. Example: runix control quit."`
+	Hotkeys struct {
+		Status struct{} `cmd:"" help:"Read saved and observed toggle state without opening the launcher."`
+		Set    struct {
+			Keycode   uint32 `required:"" help:"Physical XKB keycode (evdev code plus 8)."`
+			Modifiers uint32 `required:"" help:"Modifier mask: SHIFT=1 CTRL=4 ALT=8 SUPER=64."`
+		} `cmd:"" help:"Apply and save the toggle shortcut. Example: runix hotkeys set --keycode 38 --modifiers 77."`
+		Remove  struct{} `cmd:"" help:"Remove the saved toggle shortcut and its owned runtime binding."`
+		Restore struct {
+			Epoch string `help:"Reject restore if Hyprland has reloaded since this module lifetime."`
+		} `cmd:"" help:"Restore saved hotkeys once, without starting the launcher."`
+	} `cmd:"" help:"Inspect or change persistent Hyprland toggle shortcuts without opening the launcher."`
 }
 
 // Run forwards to the existing primary or owns a newly elected product until it quits.
 func (command *Command) Run(parsed *kong.Context) error {
+	if strings.HasPrefix(parsed.Command(), "hotkeys ") {
+		if command.StartHidden || command.DisableDesktopIntegration || command.ActivationSocket != "" {
+			return errors.New("hotkey commands do not accept launcher startup or activation socket options")
+		}
+		service, err := hotkeysettings.New()
+		if err != nil {
+			return err
+		}
+		return command.runHotkeys(context.Background(), parsed.Command(), service)
+	}
 	request := commands.Request{Kind: "control", Name: "show"}
 	bare := parsed.Command() == "launch"
 	if strings.HasPrefix(parsed.Command(), "cmd ") {

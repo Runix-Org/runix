@@ -1,4 +1,4 @@
-// Package hyprlandhotkey manages optional, non-persistent Hyprland hotkeys without Qt.
+// Package hyprlandhotkey manages optional Hyprland runtime hotkeys without Qt.
 package hyprlandhotkey
 
 import (
@@ -26,7 +26,7 @@ type Binding struct {
 }
 
 // State is an optimistic concurrency token and the module's current owned snapshot.
-// Pending names the new binding of the sole uncommitted create or replace operation.
+// Pending names the sole uncommitted create, replace, or suspended-removal operation.
 type State struct {
 	IntegrationID   string          `json:"integration_id"`
 	Version         int             `json:"version"`
@@ -38,6 +38,7 @@ type State struct {
 	ToggleAvailable bool            `json:"toggle_available"`
 	Bindings        []Binding       `json:"bindings"`
 	Pending         string          `json:"pending"`
+	PendingRemoval  bool            `json:"pending_removal"`
 	Error           *OperationError `json:"error,omitempty"`
 }
 
@@ -148,6 +149,11 @@ func (c *Client) Rollback(ctx context.Context, expected State) (State, error) {
 // Remove removes one owned handle, never all bindings on a key.
 func (c *Client) Remove(ctx context.Context, expected State, handle string) (State, error) {
 	return c.change(ctx, "remove", expected, handle, Combination{})
+}
+
+// Suspend starts a rollback-capable removal while retaining the disabled binding.
+func (c *Client) Suspend(ctx context.Context, expected State, handle string) (State, error) {
+	return c.change(ctx, "suspend", expected, handle, Combination{})
 }
 
 func (c *Client) change(ctx context.Context, op string, expected State,

@@ -81,6 +81,7 @@ const moduleFailureScenario = `
 local callbacks, objects, deferred = {}, {}, nil
 hl = {
     dsp = {},
+    exec_cmd = function() end,
     on = function(event, callback) callbacks[event] = callback; return {} end,
     timer = function(callback) deferred = callback; return {} end,
     bind = function()
