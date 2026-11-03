@@ -9,6 +9,8 @@ ApplicationWindow {
     flags: Qt.Window | Qt.FramelessWindowHint
     onClosing: Qt.quit()
     property var launchInfo: ({busy: false, status: ""})
+    property bool integrationOpen: false
+    property bool integrationStartupResolved: false
     Repeater {
         id: launchRepeater
         model: launchState
@@ -72,12 +74,125 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 MouseArea { anchors.fill: parent; onPressed: windowPolicy.startMove() }
             }
+            Button {
+                id: integrationButton
+                text: "Integration"
+                onClicked: {
+                    window.integrationStartupResolved = true
+                    window.integrationOpen = !window.integrationOpen
+                    if (window.integrationOpen) integrationPanel.itemAt(0).request("refresh")
+                }
+            }
             Button { text: "Quit"; onClicked: Qt.quit() }
+        }
+        Repeater {
+            id: integrationPanel
+            model: integrationState
+            delegate: ScrollView {
+                id: setup
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                visible: window.integrationOpen
+                clip: true
+                contentWidth: availableWidth
+                readonly property var info: JSON.parse(model.snapshot)
+                function request(action) {
+                    model.command = JSON.stringify({action: action, automatic: automatic.checked})
+                }
+                onInfoChanged: {
+                    if (!window.integrationStartupResolved) {
+                        window.integrationOpen = info.phase !== "ready" && info.phase !== "unavailable"
+                        if (!info.busy) window.integrationStartupResolved = true
+                    }
+                }
+                ColumnLayout {
+                    width: setup.availableWidth
+                    spacing: 10
+                    Label {
+                        text: "Hyprland integration"
+                        font.pixelSize: 18
+                    }
+                    Label {
+                        Layout.fillWidth: true
+                        text: setup.info.status || ""
+                        textFormat: Text.PlainText
+                        wrapMode: Text.Wrap
+                    }
+                    Label {
+                        Layout.fillWidth: true
+                        visible: !!setup.info.path
+                        text: setup.info.path || ""
+                        textFormat: Text.PlainText
+                        wrapMode: Text.WrapAnywhere
+                    }
+                    Label {
+                        Layout.fillWidth: true
+                        visible: !!setup.info.require && !setup.info.available
+                        text: "Add this line to your Hyprland Lua config. Then click I connected it."
+                        textFormat: Text.PlainText
+                        wrapMode: Text.Wrap
+                    }
+                    TextArea {
+                        Layout.fillWidth: true
+                        visible: !!setup.info.require && !setup.info.available
+                        text: setup.info.require || ""
+                        textFormat: TextEdit.PlainText
+                        readOnly: true
+                        selectByMouse: true
+                        wrapMode: TextEdit.WrapAnywhere
+                    }
+                    CheckBox {
+                        id: automatic
+                        Layout.fillWidth: true
+                        visible: setup.info.phase !== "unavailable"
+                        enabled: !setup.info.busy
+                        text: "Install and update automatically at startup"
+                        checked: !!setup.info.automatic
+                        onToggled: setup.request("preference")
+                    }
+                    Label {
+                        Layout.fillWidth: true
+                        visible: setup.info.phase !== "unavailable"
+                        text: "Installation and updates reload Hyprland. Your Hyprland config is never edited."
+                        textFormat: Text.PlainText
+                        wrapMode: Text.Wrap
+                    }
+                    Flow {
+                        Layout.fillWidth: true
+                        spacing: 8
+                        Button {
+                            text: setup.info.phase === "install" ? "Install" : "Install / update"
+                            visible: !!setup.info.path && !setup.info.available
+                            enabled: !setup.info.busy
+                            onClicked: setup.request("install")
+                        }
+                        Button {
+                            text: "I connected it"
+                            visible: !!setup.info.require && !setup.info.available
+                            enabled: !setup.info.busy
+                            onClicked: setup.request("confirm")
+                        }
+                        Button {
+                            text: "Check again"
+                            enabled: !setup.info.busy
+                            onClicked: setup.request("refresh")
+                        }
+                        Button {
+                            text: setup.info.available ? "Continue" : "Continue without integration"
+                            onClicked: {
+                                window.integrationStartupResolved = true
+                                window.integrationOpen = false
+                            }
+                        }
+                    }
+                }
+            }
         }
         Repeater {
             model: catalogState
             delegate: ColumnLayout {
                 id: catalog
+                visible: !window.integrationOpen
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 readonly property bool loading: model.loading
@@ -113,8 +228,15 @@ ApplicationWindow {
                             text: search.info.query || ""
                             onTextEdited: model.command = JSON.stringify({op: "query", text: text})
                             Component.onCompleted: {
-                                launcher.query = query
-                                if (window.visible) forceActiveFocus()
+                                launcher.query = window.integrationOpen ? integrationButton : query
+                                if (window.visible) launcher.query.forceActiveFocus()
+                            }
+                            Connections {
+                                target: window
+                                function onIntegrationOpenChanged() {
+                                    launcher.query = window.integrationOpen ? integrationButton : query
+                                    if (window.visible) launcher.query.forceActiveFocus()
+                                }
                             }
                             Keys.onUpPressed: { if (results.item) results.item.move(-1) }
                             Keys.onDownPressed: { if (results.item) results.item.move(1) }

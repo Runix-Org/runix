@@ -4,12 +4,15 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/suite"
+	"runix/data/hyprland"
 )
 
 type moduleSuite struct{ suite.Suite }
@@ -25,7 +28,9 @@ func (s *moduleSuite) TestPartialRollbackCanBeRetriedWithoutLosingOldBinding() {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	command := exec.CommandContext(ctx, interpreter, "-", "../../data/hyprland/runix-hotkeys.lua")
+	modulePath := filepath.Join(s.T().TempDir(), "runix.lua")
+	s.Require().NoError(os.WriteFile(modulePath, []byte(hyprland.Source), 0o600))
+	command := exec.CommandContext(ctx, interpreter, "-", modulePath)
 	command.Stdin = strings.NewReader(moduleFailureScenario)
 	var output, diagnostics bytes.Buffer
 	command.Stdout, command.Stderr = &output, &diagnostics
@@ -40,6 +45,7 @@ func (s *moduleSuite) TestPartialRollbackCanBeRetriedWithoutLosingOldBinding() {
 	s.Require().Len(snapshots, 9)
 	s.False(snapshots[0].Ready, "setup must not advertise readiness inside configuration evaluation")
 	s.True(snapshots[1].Ready)
+	s.Equal(hyprland.Identity, snapshots[1].IntegrationID, "the deployed source must report its stamped identity")
 	s.Require().NotNil(snapshots[2].Error)
 	s.Equal("invalid_request", snapshots[2].Error.Code)
 	s.Empty(snapshots[2].Pending)

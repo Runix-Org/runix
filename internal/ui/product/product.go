@@ -117,6 +117,7 @@ func Run(args []string, options Options) error {
 		return current.Search(queryContext, query)
 	}
 	var launches *launchAdapter
+	var integration *integrationAdapter
 	results, err := searchview.Install(engine, find, func(id string, generation uint64) {
 		deliveryMu.Lock()
 		defer deliveryMu.Unlock()
@@ -143,6 +144,9 @@ func Run(args []string, options Options) error {
 		}
 		if launches != nil {
 			launches.stop()
+		}
+		if integration != nil {
+			integration.stop()
 		}
 		stopSocket()
 		if lifecycle != nil {
@@ -171,6 +175,7 @@ func Run(args []string, options Options) error {
 		return err
 	}
 	launches = installLaunch(engine, results, lifecycle)
+	integration = installIntegration(ctx, engine, options.WindowControl)
 	lifecycle.SetErrorHandler(func(err error) {
 		activationError = "Window operation failed: " + err.Error()
 		failed = true

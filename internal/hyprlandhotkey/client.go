@@ -28,6 +28,7 @@ type Binding struct {
 // State is an optimistic concurrency token and the module's current owned snapshot.
 // Pending names the new binding of the sole uncommitted create or replace operation.
 type State struct {
+	IntegrationID   string          `json:"integration_id"`
 	Version         int             `json:"version"`
 	Epoch           string          `json:"epoch"`
 	Revision        uint64          `json:"revision"`

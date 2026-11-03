@@ -20,7 +20,7 @@ type Command struct {
 	commands.CLI
 	ActivationSocket          string   `help:"Use this private activation socket path." placeholder:"PATH"`
 	StartHidden               bool     `help:"Start a new instance hidden; only valid without a command."`
-	DisableDesktopIntegration bool     `help:"Disable desktop window integration for a new instance."`
+	DisableDesktopIntegration bool     `help:"Disable desktop window control and Lua module setup for a new instance."`
 	Launch                    struct{} `cmd:"" default:"withargs" hidden:""`
 	Control                   struct {
 		Operation string `arg:"" enum:"show,hide,toggle,quit" help:"Change visibility or quit the instance."`
