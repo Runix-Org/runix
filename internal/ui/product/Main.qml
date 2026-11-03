@@ -88,6 +88,14 @@ ApplicationWindow {
                     textFormat: Text.PlainText
                     wrapMode: Text.Wrap
                 }
+                Label {
+                    Layout.fillWidth: true
+                    visible: model.activation_error !== ""
+                    text: model.activation_error
+                    textFormat: Text.PlainText
+                    wrapMode: Text.Wrap
+                    color: "#ff8a80"
+                }
                 Repeater {
                     model: searchState
                     delegate: ColumnLayout {

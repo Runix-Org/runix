@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/suite"
+	"runix/internal/commands"
 )
 
 type TransportSuite struct{ suite.Suite }
@@ -28,30 +29,31 @@ func (s *TransportSuite) socketPath() string {
 
 func (s *TransportSuite) TestSendReturnsHandlerResult() {
 	path := s.socketPath()
-	called := make(chan string, 1)
-	stop, err := Listen(path, func(_ context.Context, command string) error {
-		called <- command
-		return nil
+	called := make(chan commands.Request, 1)
+	stop, err := Listen(path, func(_ context.Context, request commands.Request) (func(), error) {
+		return func() { called <- request }, nil
 	})
 	s.Require().NoError(err)
 	defer stop()
-	s.NoError(Send(context.Background(), path, "toggle"))
-	s.Equal("toggle", <-called)
+	request := commands.Request{Kind: "cmd", Name: "full"}
+	s.NoError(Send(context.Background(), path, request))
+	s.Equal(request, <-called)
 }
 
 func (s *TransportSuite) TestRejectsMalformedRequests() {
 	for name, payload := range map[string]string{
-		"unknown field": `{"command":"show","extra":true}`,
-		"extra value":   `{"command":"show"} {}`,
-		"unsupported":   `{"command":"launch"}`,
-		"oversized":     `{"command":"show","padding":"` + strings.Repeat("x", maxMessage) + `"}`,
+		"unknown field":          `{"kind":"cmd","name":"full","extra":true}`,
+		"extra value":            `{"kind":"cmd","name":"full"} {}`,
+		"unknown command":        `{"kind":"cmd","name":"launch"}`,
+		"arguments":              `{"kind":"cmd","name":"full","args":["--bogus"]}`,
+		"joined control actions": `{"kind":"control","name":"show|hide"}`,
+		"oversized":              `{"kind":"cmd","name":"full","padding":"` + strings.Repeat("x", maxMessage) + `"}`,
 	} {
 		s.Run(name, func() {
 			path := s.socketPath()
 			called := make(chan struct{}, 1)
-			stop, err := Listen(path, func(context.Context, string) error {
-				called <- struct{}{}
-				return nil
+			stop, err := Listen(path, func(context.Context, commands.Request) (func(), error) {
+				return func() { called <- struct{}{} }, nil
 			})
 			s.Require().NoError(err)
 			defer stop()
@@ -77,15 +79,15 @@ func (s *TransportSuite) TestShutdownCancelsHandlerAndRemovesSocket() {
 	path := s.socketPath()
 	started := make(chan struct{})
 	canceled := make(chan struct{})
-	stop, err := Listen(path, func(ctx context.Context, _ string) error {
+	stop, err := Listen(path, func(ctx context.Context, _ commands.Request) (func(), error) {
 		close(started)
 		<-ctx.Done()
 		close(canceled)
-		return ctx.Err()
+		return nil, ctx.Err()
 	})
 	s.Require().NoError(err)
 	sent := make(chan error, 1)
-	go func() { sent <- Send(context.Background(), path, "show") }()
+	go func() { sent <- Send(context.Background(), path, commands.Request{Kind: "control", Name: "show"}) }()
 	<-started
 	stop()
 	select {
@@ -103,10 +105,39 @@ func (s *TransportSuite) TestShutdownCancelsHandlerAndRemovesSocket() {
 	s.True(os.IsNotExist(err))
 }
 
-func (s *TransportSuite) TestHandlerErrorIsReturned() {
+func (s *TransportSuite) TestAcceptedWorkRunsAfterAcknowledgment() {
 	path := s.socketPath()
-	stop, err := Listen(path, func(context.Context, string) error { return errors.New("UI is unavailable") })
+	acknowledged := make(chan struct{})
+	called := make(chan struct{})
+	stop, err := Listen(path, func(context.Context, commands.Request) (func(), error) {
+		return func() {
+			<-acknowledged
+			close(called)
+		}, nil
+	})
 	s.Require().NoError(err)
 	defer stop()
-	s.EqualError(Send(context.Background(), path, "hide"), "UI is unavailable")
+	conn, err := (&net.Dialer{}).DialContext(context.Background(), "unix", path)
+	s.Require().NoError(err)
+	s.Require().NoError(json.NewEncoder(conn).Encode(commands.Request{Kind: "control", Name: "quit"}))
+	var resp response
+	s.Require().NoError(json.NewDecoder(conn).Decode(&resp))
+	s.True(resp.Success)
+	close(acknowledged)
+	s.NoError(conn.Close())
+	select {
+	case <-called:
+	case <-time.After(time.Second):
+		s.Fail("accepted work did not run after acknowledgment")
+	}
+}
+
+func (s *TransportSuite) TestHandlerErrorIsReturned() {
+	path := s.socketPath()
+	stop, err := Listen(path, func(context.Context, commands.Request) (func(), error) {
+		return nil, errors.New("UI is unavailable")
+	})
+	s.Require().NoError(err)
+	defer stop()
+	s.EqualError(Send(context.Background(), path, commands.Request{Kind: "control", Name: "hide"}), "UI is unavailable")
 }

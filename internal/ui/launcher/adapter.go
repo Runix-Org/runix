@@ -34,6 +34,15 @@ type Adapter struct {
 	previous     client
 	activeCancel context.CancelFunc
 	beforeShow   func()
+	operations   chan queuedOperation
+	onError      func(error)
+	queueMu      sync.Mutex
+	quitting     atomic.Bool
+}
+
+type queuedOperation struct {
+	command string
+	ready   <-chan struct{}
 }
 
 // SetBeforeShow installs a GUI-thread hook called before a hidden window is shown.
@@ -83,7 +92,12 @@ func Install(engine *qml.QQmlApplicationEngine, hyprland, hidden bool) (*Adapter
 	engine.RootContext().SetContextProperty2("launcherStartHidden", value)
 	value.Delete()
 	ctx, cancel := context.WithCancel(context.Background())
-	a := &Adapter{engine: engine, object: object, ctx: ctx, cancel: cancel, hyprland: hyprland}
+	a := &Adapter{
+		engine: engine, object: object, ctx: ctx, cancel: cancel, hyprland: hyprland,
+		operations: make(chan queuedOperation, 32),
+	}
+	a.workers.Add(1)
+	go a.runOperations()
 	model := qt.NewQAbstractListModel2(engine.QObject)
 	model.OnRowCount(func(parent *qt.QModelIndex) int {
 		if parent.IsValid() {
@@ -114,6 +128,81 @@ func Install(engine *qml.QQmlApplicationEngine, hyprland, hidden bool) (*Adapter
 	return a, nil
 }
 
+// SetErrorHandler installs a GUI-thread callback for accepted operations that fail.
+func (a *Adapter) SetErrorHandler(handler func(error)) {
+	a.onError = handler
+}
+
+// Enqueue accepts an operation without waiting for GUI execution.
+func (a *Adapter) Enqueue(operation string) error {
+	return a.enqueue(operation, nil)
+}
+
+// EnqueueAfterReply reserves a bounded queue slot and returns a release function.
+func (a *Adapter) EnqueueAfterReply(operation string) (func(), error) {
+	gate := make(chan struct{})
+	if err := a.enqueue(operation, gate); err != nil {
+		return nil, err
+	}
+	return func() { close(gate) }, nil
+}
+
+func (a *Adapter) enqueue(operation string, gate <-chan struct{}) error {
+	a.queueMu.Lock()
+	defer a.queueMu.Unlock()
+	if a.stopped.Load() || a.quitting.Load() {
+		return errors.New("launcher is stopping")
+	}
+	select {
+	case a.operations <- queuedOperation{command: operation, ready: gate}:
+		if operation == "quit" {
+			a.quitting.Store(true)
+		}
+		return nil
+	default:
+		return errors.New("launcher activation queue is full")
+	}
+}
+
+func (a *Adapter) runOperations() {
+	defer a.workers.Done()
+	for {
+		select {
+		case <-a.ctx.Done():
+			return
+		case queued := <-a.operations:
+			if queued.ready != nil {
+				select {
+				case <-a.ctx.Done():
+					return
+				case <-queued.ready:
+				}
+			}
+			if a.ctx.Err() != nil {
+				return
+			}
+			if queued.command == "quit" {
+				mainthread.Start(func() {
+					if !a.stopped.Load() {
+						qt.QCoreApplication_Quit()
+					}
+				})
+				continue
+			}
+			if err := a.Handle(a.ctx, queued.command); err != nil && a.ctx.Err() == nil {
+				fmt.Fprintln(os.Stderr, err)
+				if a.onError != nil {
+					mainthread.Start(func() {
+						if !a.stopped.Load() {
+							a.onError(err)
+						}
+					})
+				}
+			}
+		}
+	}
+}
+
 // Request submits a GUI-originated operation without blocking the event loop.
 // Call only on the GUI thread, including during shutdown.
 func (a *Adapter) Request(command string) bool {
@@ -122,7 +211,7 @@ func (a *Adapter) Request(command string) bool {
 	}
 	ctx, cancel := context.WithTimeout(a.ctx, 1500*time.Millisecond)
 	a.previousMu.Lock()
-	if a.stopped.Load() || !a.pending.CompareAndSwap(false, true) {
+	if a.stopped.Load() || a.quitting.Load() || !a.pending.CompareAndSwap(false, true) {
 		a.previousMu.Unlock()
 		cancel()
 		return false
@@ -213,7 +302,7 @@ func (a *Adapter) Handle(parent context.Context, command string) error {
 	if command != "show" && command != "hide" && command != "toggle" {
 		return errors.New("unknown activation command")
 	}
-	ctx, cancel := context.WithCancel(parent)
+	ctx, cancel := context.WithTimeout(parent, 2*time.Second)
 	a.previousMu.Lock()
 	if a.stopped.Load() {
 		a.previousMu.Unlock()

@@ -9,26 +9,21 @@ import (
 	"syscall"
 )
 
-func defaultEndpoint(stderr io.Writer) (string, func(), error) {
+func defaultEndpoint(stderr io.Writer) (string, error) {
 	runtimeDir := os.Getenv("XDG_RUNTIME_DIR")
-	if validRuntimeDirectory(runtimeDir) {
-		directory := filepath.Join(runtimeDir, "runix")
-		// #nosec G703 -- The session path is absolute, owner-private, and never supplied by desktop metadata.
-		if err := os.Mkdir(directory, 0o700); err != nil && !errors.Is(err, os.ErrExist) {
-			return "", nil, fmt.Errorf("create activation directory: %w", err)
-		}
-		if !validPrivateDirectory(directory) {
-			return "", nil, errors.New("activation directory must be a private directory owned by this user")
-		}
-		return filepath.Join(directory, "activation.sock"), func() {}, nil
+	directory := filepath.Join(runtimeDir, "runix")
+	if !validRuntimeDirectory(runtimeDir) {
+		directory = filepath.Join(os.TempDir(), fmt.Sprintf("runix-%d", os.Getuid()))
+		fmt.Fprintf(stderr, "Using fallback activation socket: %s\n", filepath.Join(directory, "activation.sock"))
 	}
-	directory, err := os.MkdirTemp("", "runix-activation.")
-	if err != nil {
-		return "", nil, fmt.Errorf("create temporary activation directory: %w", err)
+	// #nosec G703 -- The selected directory is checked for ownership, permissions, and final symlinks below.
+	if err := os.Mkdir(directory, 0o700); err != nil && !errors.Is(err, os.ErrExist) {
+		return "", fmt.Errorf("create activation directory: %w", err)
 	}
-	endpoint := filepath.Join(directory, "activation.sock")
-	fmt.Fprintf(stderr, "Using temporary activation socket: %s\n", endpoint)
-	return endpoint, func() { _ = os.Remove(directory) }, nil
+	if !validPrivateDirectory(directory) {
+		return "", errors.New("activation directory must be a private directory owned by this user")
+	}
+	return filepath.Join(directory, "activation.sock"), nil
 }
 
 func validRuntimeDirectory(path string) bool {

@@ -2,10 +2,12 @@
 package qmlbridge
 
 import (
+	"context"
 	"fmt"
 	"runtime"
 
 	"runix/internal/activation"
+	"runix/internal/commands"
 	"runix/internal/search"
 	"runix/internal/table"
 	"runix/internal/ui/detailview"
@@ -123,8 +125,8 @@ func Run(
 	}
 	stopActivationSocket := func() {}
 	stopActivation := func() {
-		lifecycle.Stop()
 		stopActivationSocket()
+		lifecycle.Stop()
 	}
 	defer stopActivation()
 	var debug *semanticdebug.Adapter
@@ -142,7 +144,18 @@ func Run(
 		return fmt.Errorf("load UI laboratory QML: no root object; see Qt errors above")
 	}
 	if options.ActivationSocket != "" {
-		stopSocket, listenErr := activation.Listen(options.ActivationSocket, lifecycle.Handle)
+		stopSocket, listenErr := activation.Listen(options.ActivationSocket, func(
+			requestContext context.Context, request commands.Request,
+		) (func(), error) {
+			if err := requestContext.Err(); err != nil {
+				return nil, err
+			}
+			operation, resolveErr := commands.Resolve(request)
+			if resolveErr != nil {
+				return nil, resolveErr
+			}
+			return lifecycle.EnqueueAfterReply(operation)
+		})
 		if listenErr != nil {
 			return listenErr
 		}

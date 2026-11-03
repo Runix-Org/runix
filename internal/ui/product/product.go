@@ -10,18 +10,18 @@ import (
 	"sync"
 	"sync/atomic"
 
+	qt "github.com/mappu/miqt/qt6"
+	"github.com/mappu/miqt/qt6/mainthread"
+	"github.com/mappu/miqt/qt6/qml"
 	"runix/internal/activation"
 	"runix/internal/applications"
+	"runix/internal/commands"
 	"runix/internal/desktop"
 	"runix/internal/search"
 	"runix/internal/ui/icons"
 	"runix/internal/ui/launcher"
 	"runix/internal/ui/searchview"
 	"runix/internal/ui/windowpolicy"
-
-	qt "github.com/mappu/miqt/qt6"
-	"github.com/mappu/miqt/qt6/mainthread"
-	"github.com/mappu/miqt/qt6/qml"
 )
 
 //go:embed Main.qml
@@ -32,6 +32,7 @@ type Options struct {
 	ActivationSocket string
 	StartHidden      bool
 	WindowControl    bool
+	InitialOperation string
 }
 
 // Run owns the GUI thread and startup scan until explicit Quit or native close.
@@ -59,6 +60,7 @@ func Run(args []string, options Options) error {
 	loading := true
 	failed := false
 	state := qt.NewQAbstractListModel()
+	activationError := ""
 	state.OnRowCount(func(parent *qt.QModelIndex) int {
 		if parent.IsValid() {
 			return 0
@@ -68,9 +70,11 @@ func Run(args []string, options Options) error {
 	const statusRole = int(qt.UserRole) + 1
 	const loadingRole = statusRole + 1
 	const failedRole = loadingRole + 1
+	const activationErrorRole = failedRole + 1
 	state.OnRoleNames(func(_ func() map[int][]byte) map[int][]byte {
 		return map[int][]byte{
 			statusRole: []byte("status"), loadingRole: []byte("loading"), failedRole: []byte("failed"),
+			activationErrorRole: []byte("activation_error"),
 		}
 	})
 	state.OnData(func(index *qt.QModelIndex, role int) *qt.QVariant {
@@ -84,10 +88,21 @@ func Run(args []string, options Options) error {
 			return qt.NewQVariant8(loading)
 		case failedRole:
 			return qt.NewQVariant8(failed)
+		case activationErrorRole:
+			return qt.NewQVariant14(activationError)
 		default:
 			return qt.NewQVariant()
 		}
 	})
+
+	notifyState := func() {
+		parent := qt.NewQModelIndex()
+		defer parent.Delete()
+		index := state.Index(0, 0, parent)
+		runtime.SetFinalizer(index, nil)
+		defer index.Delete()
+		state.DataChanged(index, index)
+	}
 	engine.RootContext().SetContextProperty("catalogState", state.QObject)
 	find := func(queryContext context.Context, query string) []search.Record {
 		select {
@@ -129,10 +144,10 @@ func Run(args []string, options Options) error {
 		if launches != nil {
 			launches.stop()
 		}
+		stopSocket()
 		if lifecycle != nil {
 			lifecycle.Stop()
 		}
-		stopSocket()
 		stopWindow()
 		results.Stop()
 		qt.QCoreApplication_SendPostedEvents2(nil, int(qt.QEvent__MetaCall))
@@ -156,17 +171,38 @@ func Run(args []string, options Options) error {
 		return err
 	}
 	launches = installLaunch(engine, results, lifecycle)
-	socketCleanup, err := activation.Listen(options.ActivationSocket, lifecycle.Handle)
-	if err != nil {
-		return err
-	}
-	stopSocket = socketCleanup
+	lifecycle.SetErrorHandler(func(err error) {
+		activationError = "Window operation failed: " + err.Error()
+		failed = true
+		notifyState()
+	})
 	url := qt.NewQUrl3("qrc:/runix/product/Main.qml")
 	defer url.Delete()
 	engine.LoadData2(document, url)
 	if len(engine.RootObjects()) == 0 {
 		return fmt.Errorf("load launcher QML: no root object; see Qt errors above")
 	}
+	if options.InitialOperation != "" {
+		if queueErr := lifecycle.Enqueue(options.InitialOperation); queueErr != nil {
+			return queueErr
+		}
+	}
+	socketCleanup, err := activation.Listen(options.ActivationSocket, func(
+		requestContext context.Context, request commands.Request,
+	) (func(), error) {
+		if contextErr := requestContext.Err(); contextErr != nil {
+			return nil, contextErr
+		}
+		operation, resolveErr := commands.Resolve(request)
+		if resolveErr != nil {
+			return nil, resolveErr
+		}
+		return lifecycle.EnqueueAfterReply(operation)
+	})
+	if err != nil {
+		return err
+	}
+	stopSocket = socketCleanup
 	config := desktop.ReadCatalogConfig(os.Getenv)
 	live = desktop.StartLive(ctx, config, func(update desktop.Update) {
 		previous := catalog.Load()
