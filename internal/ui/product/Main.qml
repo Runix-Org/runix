@@ -11,6 +11,28 @@ ApplicationWindow {
     property var launchInfo: ({busy: false, status: ""})
     property bool integrationOpen: false
     property bool integrationStartupResolved: false
+    property bool shortcutStarted: false
+    property bool shortcutStartupResolved: false
+    property bool settingsOpen: false
+    property bool onboarding: false
+    property var shortcutInfo: ({busy: true, onboarding: false, available: false})
+    property string shortcutNotice: ""
+    function shortcutRequest(action) {
+        const panel = shortcutPanel.itemAt(0)
+        if (panel) panel.request(action)
+    }
+    function startShortcutSetup() {
+        if (!integrationStartupResolved || integrationOpen || shortcutStarted) return
+        shortcutStarted = true
+        shortcutRequest("startup")
+    }
+    function openIntegration() {
+        shortcutRequest("cancel")
+        integrationOpen = true
+        integrationPanel.itemAt(0).request("refresh")
+    }
+    onSettingsOpenChanged: { if (!settingsOpen) shortcutRequest("cancel") }
+    onVisibleChanged: { if (!visible) shortcutRequest("cancel") }
     Repeater {
         id: launchRepeater
         model: launchState
@@ -36,6 +58,7 @@ ApplicationWindow {
         windowPolicy.attach(window)
         launcher.window = window
         if (!launcherStartHidden) window.show()
+        Qt.callLater(window.startShortcutSetup)
     }
     function requestVisibility(command) { visibilityCommand.itemAt(0).request(command) }
     Repeater {
@@ -43,7 +66,15 @@ ApplicationWindow {
         model: launcherCommands
         delegate: Item { function request(command) { model.command = command } }
     }
-    Shortcut { sequence: "Escape"; onActivated: window.requestVisibility("hide") }
+    Shortcut {
+        sequence: "Escape"
+        enabled: !window.shortcutInfo.recording
+        onActivated: {
+            if (window.shortcutInfo.recording) return
+            if (window.settingsOpen && !window.onboarding) { window.settingsOpen = false; return }
+            window.requestVisibility("hide")
+        }
+    }
     Repeater {
         model: windowCommands
         delegate: Item {
@@ -69,18 +100,34 @@ ApplicationWindow {
         spacing: 8
         RowLayout {
             Label {
-                text: "Applications"
+                text: window.onboarding ? "Shortcut setup" : window.settingsOpen ? "Settings" : window.integrationOpen ? "Integration" : "Applications"
                 font.pixelSize: 20
                 Layout.fillWidth: true
                 MouseArea { anchors.fill: parent; onPressed: windowPolicy.startMove() }
             }
             Button {
+                id: settingsButton
+                text: window.settingsOpen ? "Back" : "Settings"
+                visible: !window.integrationOpen && !window.onboarding
+                onClicked: {
+                    if (window.settingsOpen) window.settingsOpen = false
+                    else {
+                        window.settingsOpen = true
+                        integrationPanel.itemAt(0).request("refresh")
+                        window.shortcutRequest("refresh")
+                    }
+                }
+            }
+            Button {
                 id: integrationButton
                 text: "Integration"
+                visible: window.integrationOpen || window.settingsOpen || window.onboarding
                 onClicked: {
-                    window.integrationStartupResolved = true
-                    window.integrationOpen = !window.integrationOpen
-                    if (window.integrationOpen) integrationPanel.itemAt(0).request("refresh")
+                    if (window.integrationOpen) {
+                        window.integrationOpen = false
+                        window.integrationStartupResolved = true
+                        window.startShortcutSetup()
+                    } else window.openIntegration()
                 }
             }
             Button { text: "Quit"; onClicked: Qt.quit() }
@@ -102,8 +149,12 @@ ApplicationWindow {
                 onInfoChanged: {
                     if (!window.integrationStartupResolved) {
                         window.integrationOpen = info.phase !== "ready" && info.phase !== "unavailable"
-                        if (!info.busy) window.integrationStartupResolved = true
+                        if (!info.busy && !window.integrationOpen) {
+                            window.integrationStartupResolved = true
+                            Qt.callLater(window.startShortcutSetup)
+                        }
                     }
+                    if (window.shortcutStarted && !info.busy) window.shortcutRequest("refresh")
                 }
                 ColumnLayout {
                     width: setup.availableWidth
@@ -178,10 +229,12 @@ ApplicationWindow {
                             onClicked: setup.request("refresh")
                         }
                         Button {
-                            text: setup.info.available ? "Continue" : "Continue without integration"
+                            text: setup.info.available ? "Continue" : "Not now"
                             onClicked: {
                                 window.integrationStartupResolved = true
                                 window.integrationOpen = false
+                                window.startShortcutSetup()
+                                if (window.shortcutStarted) window.shortcutRequest("refresh")
                             }
                         }
                     }
@@ -189,14 +242,156 @@ ApplicationWindow {
             }
         }
         Repeater {
+            id: shortcutPanel
+            model: shortcutState
+            delegate: ScrollView {
+                id: shortcuts
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                visible: window.settingsOpen && !window.integrationOpen
+                clip: true
+                contentWidth: availableWidth
+                readonly property var info: JSON.parse(model.snapshot)
+                readonly property var focusControl: skipShortcut
+                function request(action) { model.command = JSON.stringify({action: action}) }
+                function combination(value) {
+                    if (!value) return "Not assigned"
+                    let parts = []
+                    if (value.modifiers & 4) parts.push("Ctrl")
+                    if (value.modifiers & 8) parts.push("Alt")
+                    if (value.modifiers & 1) parts.push("Shift")
+                    if (value.modifiers & 64) parts.push("Super")
+                    parts.push("Keycode " + value.keycode)
+                    return parts.join(" + ")
+                }
+                onInfoChanged: {
+                    const wasOnboarding = window.onboarding
+                    window.shortcutInfo = info
+                    if (window.shortcutStarted && !info.busy) window.shortcutStartupResolved = true
+                    window.onboarding = !!info.onboarding
+                    if (window.onboarding) window.settingsOpen = true
+                    if (info.completed && !info.onboarding && wasOnboarding) {
+                        window.settingsOpen = false
+                        if (info.error) window.shortcutNotice = info.error
+                    }
+                }
+                ColumnLayout {
+                    width: shortcuts.availableWidth
+                    spacing: 8
+                    Label {
+                        text: window.onboarding ? "Set up your shortcut" : "Keyboard shortcut"
+                        font.pixelSize: 18
+                    }
+                    Label {
+                        Layout.fillWidth: true
+                        text: "Toggle runix"
+                        font.bold: true
+                    }
+                    Label {
+                        Layout.fillWidth: true
+                        text: "Saved: " + shortcuts.combination(shortcuts.info.saved)
+                            + " · " + (shortcuts.info.status || "Checking...")
+                        textFormat: Text.PlainText
+                        wrapMode: Text.Wrap
+                    }
+                    Label {
+                        Layout.fillWidth: true
+                        visible: !!shortcuts.info.error
+                        text: shortcuts.info.error || ""
+                        textFormat: Text.PlainText
+                        color: "#ff8a80"
+                        wrapMode: Text.Wrap
+                    }
+                    Label {
+                        Layout.fillWidth: true
+                        visible: !shortcuts.info.available
+                        text: "Shortcut assignment needs a ready Hyprland module. Open Integration to repair it, "
+                            + "or continue without a shortcut."
+                        wrapMode: Text.Wrap
+                    }
+                    Label {
+                        Layout.fillWidth: true
+                        text: shortcuts.info.recording ? "Press a shortcut. Escape cancels."
+                            : shortcuts.info.candidate ? "Candidate: " + shortcuts.combination(shortcuts.info.candidate)
+                                + " · " + (shortcuts.info.candidate_status === "owned"
+                                    ? "Owned by runix: toggle" : shortcuts.info.candidate_status)
+                            : "Record a key with optional Ctrl, Alt, Shift, or Super."
+                        textFormat: Text.PlainText
+                        wrapMode: Text.Wrap
+                    }
+                    Label {
+                        Layout.fillWidth: true
+                        visible: !!shortcuts.info.recorder_error || !!shortcuts.info.candidate_error
+                        text: shortcuts.info.recorder_error || shortcuts.info.candidate_error || ""
+                        textFormat: Text.PlainText
+                        color: "#ff8a80"
+                        wrapMode: Text.Wrap
+                    }
+                    Label {
+                        Layout.fillWidth: true
+                        text: "Keycode identifies a physical key and does not change with the keyboard layout."
+                        wrapMode: Text.Wrap
+                    }
+                    Flow {
+                        Layout.fillWidth: true
+                        spacing: 8
+                        Button {
+                            text: shortcuts.info.recording ? "Cancel recording" : "Record shortcut"
+                            enabled: shortcuts.info.recording || (!shortcuts.info.busy && shortcuts.info.available)
+                            onClicked: shortcuts.request(shortcuts.info.recording ? "cancel" : "record")
+                        }
+                        Button {
+                            text: window.onboarding ? "Save and continue" : "Save"
+                            enabled: !shortcuts.info.busy && !shortcuts.info.recording && shortcuts.info.can_save
+                            onClicked: shortcuts.request("apply")
+                        }
+                        Button {
+                            text: "Remove"
+                            visible: !!shortcuts.info.saved
+                            enabled: !shortcuts.info.busy && !shortcuts.info.recording && shortcuts.info.available
+                            onClicked: shortcuts.request("remove")
+                        }
+                        Button {
+                            text: "Check again"
+                            enabled: !shortcuts.info.busy && !shortcuts.info.recording
+                            onClicked: {
+                                integrationPanel.itemAt(0).request("refresh")
+                                shortcuts.request("refresh")
+                            }
+                        }
+                        Button { text: "Integration"; onClicked: window.openIntegration() }
+                        Button {
+                            id: skipShortcut
+                            text: window.onboarding ? "Not now" : "Back to applications"
+                            enabled: !window.onboarding || !shortcuts.info.busy
+                            onClicked: {
+                                shortcuts.request("cancel")
+                                if (window.onboarding) shortcuts.request("skip")
+                                else window.settingsOpen = false
+                            }
+                        }
+                    }
+                    Label { visible: !!shortcuts.info.busy; text: "Checking or saving shortcut..." }
+                }
+            }
+        }
+        Repeater {
             model: catalogState
             delegate: ColumnLayout {
                 id: catalog
-                visible: !window.integrationOpen
+                visible: !window.integrationOpen && !window.settingsOpen && window.shortcutStartupResolved
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 readonly property bool loading: model.loading
                 readonly property bool failed: model.failed
+                Label {
+                    Layout.fillWidth: true
+                    visible: window.shortcutNotice !== ""
+                    text: window.shortcutNotice
+                    textFormat: Text.PlainText
+                    wrapMode: Text.Wrap
+                    color: "#ff8a80"
+                }
                 Label {
                     Layout.fillWidth: true
                     text: model.status
@@ -227,16 +422,18 @@ ApplicationWindow {
                             selectByMouse: true
                             text: search.info.query || ""
                             onTextEdited: model.command = JSON.stringify({op: "query", text: text})
-                            Component.onCompleted: {
-                                launcher.query = window.integrationOpen ? integrationButton : query
-                                if (window.visible) launcher.query.forceActiveFocus()
+                            function updateFocus() {
+                                launcher.query = window.integrationOpen ? integrationButton
+                                    : window.settingsOpen ? (window.onboarding && shortcutPanel.itemAt(0)
+                                        ? shortcutPanel.itemAt(0).focusControl : settingsButton) : query
+                                if (window.visible && launcher.query) launcher.query.forceActiveFocus()
                             }
+                            Component.onCompleted: updateFocus()
                             Connections {
                                 target: window
-                                function onIntegrationOpenChanged() {
-                                    launcher.query = window.integrationOpen ? integrationButton : query
-                                    if (window.visible) launcher.query.forceActiveFocus()
-                                }
+                                function onIntegrationOpenChanged() { query.updateFocus() }
+                                function onSettingsOpenChanged() { query.updateFocus() }
+                                function onOnboardingChanged() { query.updateFocus() }
                             }
                             Keys.onUpPressed: { if (results.item) results.item.move(-1) }
                             Keys.onDownPressed: { if (results.item) results.item.move(1) }

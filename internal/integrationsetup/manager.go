@@ -312,6 +312,10 @@ func luaQuote(s string) string {
 }
 
 func (m *Manager) readPreference(root string) (bool, error) {
+	return readBooleanPreference(root, "integration_auto_update")
+}
+
+func readBooleanPreference(root, key string) (bool, error) {
 	p := filepath.Join(root, "runix", "config.json")
 	if _, err := fileExistsSafe(p); err != nil {
 		return false, fmt.Errorf("integration preference file: %w", err)
@@ -331,15 +335,19 @@ func (m *Manager) readPreference(root string) (bool, error) {
 		return false, fmt.Errorf("integration preferences must be a JSON object")
 	}
 	var enabled bool
-	if raw, ok := values["integration_auto_update"]; ok {
+	if raw, ok := values[key]; ok {
 		if err = json.Unmarshal(raw, &enabled); err != nil {
-			return false, fmt.Errorf("decode integration_auto_update preference: %w", err)
+			return false, fmt.Errorf("decode %s preference: %w", key, err)
 		}
 	}
 	return enabled, nil
 }
 
 func (m *Manager) savePreference(root string, value bool) error {
+	return saveBooleanPreference(root, "integration_auto_update", value)
+}
+
+func saveBooleanPreference(root, key string, value bool) error {
 	p := filepath.Join(root, "runix", "config.json")
 	if _, err := fileExistsSafe(p); err != nil {
 		return err
@@ -362,12 +370,30 @@ func (m *Manager) savePreference(root string, value bool) error {
 	if err != nil {
 		return err
 	}
-	v["integration_auto_update"] = raw
+	v[key] = raw
 	b, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
 		return err
 	}
 	return atomicWrite(p, append(b, '\n'), 0o600)
+}
+
+// ShortcutSetupDismissed reads the independent, remembered shortcut setup decision.
+func ShortcutSetupDismissed() (bool, error) {
+	root, err := New(false).configRoot()
+	if err != nil {
+		return false, err
+	}
+	return readBooleanPreference(root, "shortcut_onboarding_dismissed")
+}
+
+// DismissShortcutSetup preserves all other preferences, including automatic updates.
+func DismissShortcutSetup() error {
+	root, err := New(false).configRoot()
+	if err != nil {
+		return err
+	}
+	return saveBooleanPreference(root, "shortcut_onboarding_dismissed", true)
 }
 
 func reloadHyprland(ctx context.Context) error {

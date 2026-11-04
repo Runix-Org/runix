@@ -118,6 +118,7 @@ func Run(args []string, options Options) error {
 	}
 	var launches *launchAdapter
 	var integration *integrationAdapter
+	var shortcuts *shortcutAdapter
 	results, err := searchview.Install(engine, find, func(id string, generation uint64) {
 		deliveryMu.Lock()
 		defer deliveryMu.Unlock()
@@ -148,6 +149,9 @@ func Run(args []string, options Options) error {
 		if integration != nil {
 			integration.stop()
 		}
+		if shortcuts != nil {
+			shortcuts.stop(app)
+		}
 		stopSocket()
 		if lifecycle != nil {
 			lifecycle.Stop()
@@ -176,6 +180,7 @@ func Run(args []string, options Options) error {
 	}
 	launches = installLaunch(engine, results, lifecycle)
 	integration = installIntegration(ctx, engine, options.WindowControl)
+	shortcuts = installShortcuts(ctx, app, engine, integration, options.WindowControl)
 	lifecycle.SetErrorHandler(func(err error) {
 		activationError = "Window operation failed: " + err.Error()
 		failed = true
