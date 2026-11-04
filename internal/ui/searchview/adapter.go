@@ -28,6 +28,7 @@ const (
 	subtitleRole
 	categoryRole
 	iconRole
+	displayIDRole
 )
 
 type snapshot struct {
@@ -38,6 +39,7 @@ type snapshot struct {
 	Count             int          `json:"count"`
 	SelectedIndex     int          `json:"selected_index"`
 	SelectedID        string       `json:"selected_id"`
+	SelectedLabel     string       `json:"selected_label"`
 	ActivatedID       string       `json:"activated_id"`
 	ReceivedMS        int64        `json:"received_ms"`
 	AppliedMS         int64        `json:"applied_ms"`
@@ -157,7 +159,8 @@ func Install(
 		return map[int][]byte{
 			idRole: []byte("recordID"), titleRole: []byte("title"),
 			subtitleRole: []byte("subtitle"), categoryRole: []byte("category"),
-			iconRole: []byte("iconSource"),
+			iconRole:      []byte("iconSource"),
+			displayIDRole: []byte("displayID"),
 		}
 	})
 	a.rows.OnData(func(index *qt.QModelIndex, role int) *qt.QVariant {
@@ -168,6 +171,8 @@ func Install(
 		switch role {
 		case idRole:
 			return qt.NewQVariant14(record.ID)
+		case displayIDRole:
+			return qt.NewQVariant14(displayID(record))
 		case titleRole:
 			return qt.NewQVariant14(record.Title)
 		case subtitleRole:
@@ -188,11 +193,20 @@ func Install(
 	return a, nil
 }
 
+func displayID(record search.Record) string {
+	if record.DisplayID != "" {
+		return record.DisplayID
+	}
+	return record.ID
+}
+
 func (a *Adapter) selectRow(index int) {
 	a.value.SelectedIndex = index
 	a.value.SelectedID = ""
+	a.value.SelectedLabel = ""
 	if index >= 0 {
 		a.value.SelectedID = a.records[index].ID
+		a.value.SelectedLabel = displayID(a.records[index])
 	}
 	if a.selected != nil {
 		a.selected(a.value.SelectedID)

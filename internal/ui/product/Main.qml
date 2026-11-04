@@ -548,7 +548,7 @@ ApplicationWindow {
                         }
                         Label {
                             Layout.fillWidth: true
-                            text: search.info.selected_id || ""
+                            text: search.info.selected_label || ""
                             textFormat: Text.PlainText
                             wrapMode: Text.WrapAnywhere
                         }

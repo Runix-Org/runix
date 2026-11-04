@@ -3,11 +3,9 @@ package product
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 	"runtime"
 
-	"runix/internal/applications"
-	"runix/internal/desktop"
+	"runix/internal/launchable"
 	"runix/internal/ui/launcher"
 	"runix/internal/ui/searchview"
 
@@ -18,8 +16,7 @@ import (
 
 // launchAdapter keeps Qt presentation and window policy outside the launch controller.
 type launchAdapter struct {
-	controller *applications.LaunchController
-	service    *desktop.Launcher
+	controller *launchable.LaunchController
 	model      *qt.QAbstractListModel
 	stopped    bool
 	value      struct {
@@ -30,8 +27,9 @@ type launchAdapter struct {
 
 func installLaunch(
 	engine *qml.QQmlApplicationEngine, results *searchview.Adapter, lifecycle *launcher.Adapter,
+	registry *launchable.Registry,
 ) *launchAdapter {
-	a := &launchAdapter{service: desktop.NewLauncher(os.Environ()), model: qt.NewQAbstractListModel2(engine.QObject)}
+	a := &launchAdapter{model: qt.NewQAbstractListModel2(engine.QObject)}
 	const snapshotRole = int(qt.UserRole) + 1
 	const commandRole = snapshotRole + 1
 	a.model.OnRowCount(func(parent *qt.QModelIndex) int {
@@ -62,18 +60,22 @@ func installLaunch(
 		a.controller.VisibilityChanged(value.ToBool())
 		return true
 	})
-	changed := func(outcome applications.LaunchOutcome) {
+	changed := func(outcome launchable.LaunchOutcome) {
 		if a.stopped {
 			return
 		}
 		a.value.Busy = outcome.State.Busy
 		a.value.Status = ""
+		displayID := outcome.State.ID
+		if identity, err := launchable.ParseIdentity(displayID); err == nil {
+			displayID = identity.ItemID
+		}
 		switch outcome.State.Phase {
 		case "submitting":
-			a.value.Status = fmt.Sprintf("Launching %s [%s]...", outcome.State.Name, outcome.State.ID)
+			a.value.Status = fmt.Sprintf("Launching %s [%s]...", outcome.State.Name, displayID)
 		case "failed":
 			a.value.Status = fmt.Sprintf("Cannot launch %s [%s]: %s",
-				outcome.State.Name, outcome.State.ID, outcome.State.Error)
+				outcome.State.Name, displayID, outcome.State.Error)
 		}
 		results.SetActivationEnabled(!outcome.State.Busy)
 		parent := qt.NewQModelIndex()
@@ -86,7 +88,7 @@ func installLaunch(
 			lifecycle.HideAfterLaunch()
 		}
 	}
-	a.controller = applications.NewLaunchController(a.service.Launch, mainthread.Start, changed)
+	a.controller = launchable.NewLaunchController(registry.Execute, mainthread.Start, changed)
 	results.SetSelectionHandler(a.controller.Select)
 	lifecycle.SetBeforeShow(func() {
 		if a.controller.BeforeShow() {
@@ -103,5 +105,4 @@ func (a *launchAdapter) stop() {
 	}
 	a.stopped = true
 	a.controller.Stop()
-	a.service.Close()
 }

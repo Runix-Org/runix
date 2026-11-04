@@ -61,6 +61,7 @@ FocusScope {
             id: row
             required property int index
             required property string recordID
+            required property string displayID
             required property string title
             required property string subtitle
             required property string category
@@ -103,7 +104,7 @@ FocusScope {
                     }
                     Label {
                         width: parent.width
-                        text: row.subtitle + "  [" + row.recordID + "]"
+                        text: row.subtitle + "  [" + row.displayID + "]"
                         textFormat: Text.PlainText
                         font.pixelSize: 12
                         color: row.palette.text

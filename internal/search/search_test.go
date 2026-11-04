@@ -43,12 +43,29 @@ func (s *SearchSuite) TestIndexSearchRankingAndLimit() {
 	s.Equal("000", got[0].ID)
 }
 
-func (s *SearchSuite) TestSearchTextMatchesWithoutChangingDisplayFields() {
-	record := Record{ID: "app.desktop", Title: "Localized", Subtitle: "Comment", SearchText: "Base Name Keywords"}
+func (s *SearchSuite) TestTypedMetadataMatchesWithoutChangingDisplayFields() {
+	record := Record{
+		ID: "encoded-ui-identity", Title: "Localized", Subtitle: "Comment",
+		Fields: []Field{{Kind: FieldName, Value: "Base Name"}, {Kind: FieldKeyword, Value: "Keywords"}},
+	}
 	got := NewIndex([]Record{record}).Search(context.Background(), "base keywords")
 	s.Require().Len(got, 1)
 	s.Equal("Localized", got[0].Title)
 	s.Equal("Comment", got[0].Subtitle)
+	s.Empty(NewIndex([]Record{record}).Search(context.Background(), "encoded-ui-identity"))
+}
+
+func (s *SearchSuite) TestTypedMetadataRemainsImmutableAcrossSearches() {
+	fields := []Field{{Kind: FieldKeyword, Value: "original"}}
+	index := NewIndex([]Record{{ID: "item", Fields: fields}})
+	fields[0].Value = "changed input"
+	first := index.Search(context.Background(), "original")
+	s.Require().Len(first, 1)
+	s.Equal("original", first[0].Fields[0].Value)
+	first[0].Fields[0].Value = "changed result"
+	second := index.Search(context.Background(), "")
+	s.Require().Len(second, 1)
+	s.Equal("original", second[0].Fields[0].Value)
 }
 
 func (s *SearchSuite) TestControllerRejectsIgnoringCancellationAndCoalescesBurst() {

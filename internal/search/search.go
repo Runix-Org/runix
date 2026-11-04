@@ -5,18 +5,39 @@ package search
 import (
 	"container/heap"
 	"context"
+	"slices"
 	"strings"
 	"sync"
 	"time"
 )
 
+// FieldKind identifies searchable metadata without coupling it to presentation.
+type FieldKind string
+
+const (
+	FieldName        FieldKind = "name"
+	FieldGenericName FieldKind = "generic-name"
+	FieldKeyword     FieldKind = "keyword"
+	FieldID          FieldKind = "id"
+	FieldCategory    FieldKind = "category"
+	FieldComment     FieldKind = "comment"
+)
+
+// Field retains one independently searchable metadata value.
+type Field struct {
+	Kind  FieldKind
+	Value string
+}
+
 // Record is a searchable item. ID is the stable identity supplied by callers.
 type Record struct {
 	ID, Title, Subtitle, Category string
+	// DisplayID is a human-readable local identity, separate from the opaque UI key.
+	DisplayID string
 	// CatalogGeneration identifies the immutable source snapshot, independently of query generations.
 	CatalogGeneration uint64
-	// SearchText contains additional non-display text matched by the index.
-	SearchText string
+	// Fields contains typed non-display metadata. Nil uses the presentation fields and ID.
+	Fields []Field
 	// IconName and IconPath are mutually exclusive trusted presentation data.
 	IconName, IconPath string
 }
@@ -28,13 +49,9 @@ type Find func(context.Context, string) []Record
 const resultLimit = 200
 
 type indexedRecord struct {
-	record     Record
-	id         string
-	title      string
-	subtitle   string
-	category   string
-	searchText string
-	ordinal    int
+	record  Record
+	fields  []string
+	ordinal int
 }
 
 // Index stores pre-normalized records for repeated searches.
@@ -46,11 +63,22 @@ type Index struct {
 func NewIndex(records []Record) *Index {
 	i := &Index{records: make([]indexedRecord, len(records))}
 	for n, r := range records {
-		i.records[n] = indexedRecord{
-			record: r, id: normalize(r.ID), title: normalize(r.Title),
-			subtitle: normalize(r.Subtitle), category: normalize(r.Category),
-			searchText: normalize(r.SearchText), ordinal: n,
+		fields := make([]string, 0, len(r.Fields)+3)
+		for _, value := range []string{r.Title, r.Subtitle, r.Category} {
+			if value != "" {
+				fields = append(fields, normalize(value))
+			}
 		}
+		if r.Fields == nil {
+			fields = append(fields, normalize(r.ID))
+		}
+		for _, field := range r.Fields {
+			if field.Value != "" {
+				fields = append(fields, normalize(field.Value))
+			}
+		}
+		r.Fields = slices.Clone(r.Fields)
+		i.records[n] = indexedRecord{record: r, fields: fields, ordinal: n}
 	}
 	return i
 }
@@ -97,11 +125,11 @@ func better(a, b candidate) bool {
 	return a.item.record.ID < b.item.record.ID
 }
 
-// Search matches case-insensitive whitespace-delimited tokens across ID, title,
-// subtitle, category, and non-display SearchText; every token must match. Each
-// token scores 100 for an exact field, 50 for a field prefix, or 10 for a
-// substring (best field wins). Results sort by descending score then original
-// input order (stable ties). A bounded heap retains only the best 200 rather
+// Search matches case-insensitive whitespace-delimited tokens across presentation
+// and typed metadata values; every token must match. An explicit field list keeps
+// the UI identity encoding out of searchable metadata. Each token scores 100 for
+// an exact field, 50 for a prefix, or 10 for a substring. Ties retain original
+// input order. A bounded heap retains only the best 200 rather
 // than sorting all matches. Empty queries return the first 200 records in
 // original order.
 func (i *Index) Search(ctx context.Context, query string) []Record {
@@ -117,6 +145,7 @@ func (i *Index) Search(ctx context.Context, query string) []Record {
 		out := make([]Record, n)
 		for j := range n {
 			out[j] = i.records[j].record
+			out[j].Fields = slices.Clone(out[j].Fields)
 		}
 		return out
 	}
@@ -158,12 +187,13 @@ func (i *Index) Search(ctx context.Context, query string) []Record {
 	out := make([]Record, len(matches))
 	for n, match := range matches {
 		out[n] = match.item.record
+		out[n].Fields = slices.Clone(out[n].Fields)
 	}
 	return out
 }
 
 func scoreRecord(record *indexedRecord, tokens []string) (int, bool) {
-	fields := [...]string{record.title, record.subtitle, record.category, record.id, record.searchText}
+	fields := record.fields
 	score := 0
 	for _, token := range tokens {
 		best := 0

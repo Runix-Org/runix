@@ -14,9 +14,9 @@ import (
 	"github.com/mappu/miqt/qt6/mainthread"
 	"github.com/mappu/miqt/qt6/qml"
 	"runix/internal/activation"
-	"runix/internal/applications"
 	"runix/internal/commands"
 	"runix/internal/desktop"
+	"runix/internal/launchable"
 	"runix/internal/search"
 	"runix/internal/ui/icons"
 	"runix/internal/ui/launcher"
@@ -49,12 +49,20 @@ func Run(args []string, options Options) error {
 	qt.QGuiApplication_SetQuitOnLastWindowClosed(false)
 	engine := qml.NewQQmlApplicationEngine()
 	ctx, cancel := context.WithCancel(context.Background())
-	var catalog atomic.Pointer[applications.Catalog]
+	var catalog atomic.Pointer[launchable.Catalog]
 	var deliveryMu sync.Mutex
 	deliveryScheduled := false
 	pendingCatalog := false
 	pendingIcons := false
-	var live *desktop.Live
+	registry, registryErr := launchable.NewRegistry(desktop.NewProvider(
+		desktop.ReadCatalogConfig(os.Getenv), os.Environ(),
+	))
+	if registryErr != nil {
+		cancel()
+		engine.Delete()
+		return registryErr
+	}
+	defer registry.Close()
 	stopped := false
 	status := "Loading applications…"
 	loading := true
@@ -140,11 +148,11 @@ func Run(args []string, options Options) error {
 		}
 		stopped = true
 		cancel()
-		if live != nil {
-			live.Close()
-		}
 		if launches != nil {
 			launches.stop()
+		}
+		if registry != nil {
+			registry.Close()
 		}
 		if integration != nil {
 			integration.stop()
@@ -178,7 +186,7 @@ func Run(args []string, options Options) error {
 	if err != nil {
 		return err
 	}
-	launches = installLaunch(engine, results, lifecycle)
+	launches = installLaunch(engine, results, lifecycle, registry)
 	integration = installIntegration(ctx, engine, options.WindowControl)
 	shortcuts = installShortcuts(ctx, app, engine, integration, options.WindowControl)
 	lifecycle.SetErrorHandler(func(err error) {
@@ -213,10 +221,9 @@ func Run(args []string, options Options) error {
 		return err
 	}
 	stopSocket = socketCleanup
-	config := desktop.ReadCatalogConfig(os.Getenv)
-	live = desktop.StartLive(ctx, config, func(update desktop.Update) {
+	err = registry.Start(ctx, func(update launchable.Update) {
 		previous := catalog.Load()
-		current := applications.Project(update.Snapshot, previous)
+		current := update.Catalog
 		deliveryMu.Lock()
 		catalog.Store(current)
 		catalogChanged := previous == nil || current.Generation() != previous.Generation()
@@ -257,8 +264,8 @@ func Run(args []string, options Options) error {
 				results.RefreshIcons()
 			}
 			for _, diagnostic := range current.Diagnostics() {
-				fmt.Fprintf(os.Stderr, "%s: %s [%s]: %s\n",
-					diagnostic.Code, diagnostic.Path, diagnostic.ID, diagnostic.Message)
+				fmt.Fprintf(os.Stderr, "%s/%s: %s [%s]: %s\n",
+					diagnostic.ProviderID, diagnostic.Code, diagnostic.Path, diagnostic.ID, diagnostic.Message)
 			}
 			parent := qt.NewQModelIndex()
 			defer parent.Delete()
@@ -269,6 +276,9 @@ func Run(args []string, options Options) error {
 		})
 	})
 	app.OnAboutToQuit(stop)
+	if err != nil {
+		return err
+	}
 	if code := qt.QApplication_Exec(); code != 0 {
 		return fmt.Errorf("UI event loop exited with code %d", code)
 	}
