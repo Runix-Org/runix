@@ -7,6 +7,10 @@ import (
 	"strings"
 )
 
+// Set true to treat foreign bindings on the same key as conflicts regardless of modifiers.
+// Hyprland's JSON omits ignore_mods; false assumes foreign bindings do not enable it.
+const conservativeForeignModifierConflicts = false
+
 type Combination struct {
 	Keycode   uint32 `json:"keycode"`
 	Modifiers uint32 `json:"modifiers"`
@@ -145,6 +149,9 @@ func inspectBindings(rawBinds, rawDevices []byte, owned []Binding, combination C
 			}
 		}
 		if matchedOwned {
+			continue
+		}
+		if !conservativeForeignModifierConflicts && *binding.ModMask != combination.Modifiers {
 			continue
 		}
 		result.Foreign = append(result.Foreign, ForeignBinding{

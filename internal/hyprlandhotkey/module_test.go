@@ -96,8 +96,7 @@ hl = {
         return object
     end,
 }
-local source = dofile(arg[1])
-local module = source.setup({on_toggle = function() end})
+local module = loadfile(arg[1])({on_toggle = function() end})
 local function request(op, handle, code)
     return module.request({version = 1, op = op, epoch = module.epoch,
         revision = module.revision, handle = handle or "", keycode = code or 38, modifiers = 64})
@@ -123,7 +122,7 @@ objects[3]:remove()
 emit(request("commit", transaction))
 emit(request("rollback", transaction))
 callbacks["config.unload"]()
-module = source.setup({on_ready = function() error("injected lifecycle failure") end})
+module = loadfile(arg[1])({on_ready = function() error("injected lifecycle failure") end})
 deferred()
 emit(request("status"))
 `

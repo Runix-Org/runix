@@ -1,5 +1,4 @@
 local INTEGRATION_ID = "__RUNIX_INTEGRATION_ID__"
-local M = {}
 
 local PROTOCOL_VERSION = 1
 local MAX_BINDINGS = 32
@@ -53,7 +52,7 @@ local function shell_quote(value)
     return "'" .. value:gsub("'", "'\\''") .. "'"
 end
 
-function M.setup(options)
+local function initialize(options)
     options = options or {}
     if type(options) ~= "table" then error("options must be a table") end
     if rawget(_G, "runix_hotkeys") and _G.runix_hotkeys._active then
@@ -398,5 +397,6 @@ function M.setup(options)
     if module.lifecycle_error then module.ready = false end
     return module
 end
-
-return M
+local options = ...
+if type(options) == "string" then options = nil end -- require passes the module name.
+return initialize(options)

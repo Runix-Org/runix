@@ -120,7 +120,7 @@ ApplicationWindow {
             }
             Button {
                 id: integrationButton
-                text: "Integration"
+                text: window.integrationOpen ? "Back" : "Integration"
                 visible: window.integrationOpen || window.settingsOpen || window.onboarding
                 onClicked: {
                     if (window.integrationOpen) {
@@ -135,14 +135,14 @@ ApplicationWindow {
         Repeater {
             id: integrationPanel
             model: integrationState
-            delegate: ScrollView {
+            delegate: ColumnLayout {
                 id: setup
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 visible: window.integrationOpen
-                clip: true
-                contentWidth: availableWidth
                 readonly property var info: JSON.parse(model.snapshot)
+                property bool copied: false
+                readonly property bool needsInstall: info.module_state === "missing" || info.module_state === "stale"
                 function request(action) {
                     model.command = JSON.stringify({action: action, automatic: automatic.checked})
                 }
@@ -156,88 +156,170 @@ ApplicationWindow {
                     }
                     if (window.shortcutStarted && !info.busy) window.shortcutRequest("refresh")
                 }
-                ColumnLayout {
-                    width: setup.availableWidth
-                    spacing: 10
-                    Label {
-                        text: "Hyprland integration"
-                        font.pixelSize: 18
-                    }
-                    Label {
-                        Layout.fillWidth: true
-                        text: setup.info.status || ""
-                        textFormat: Text.PlainText
-                        wrapMode: Text.Wrap
-                    }
-                    Label {
-                        Layout.fillWidth: true
-                        visible: !!setup.info.path
-                        text: setup.info.path || ""
-                        textFormat: Text.PlainText
-                        wrapMode: Text.WrapAnywhere
-                    }
-                    Label {
-                        Layout.fillWidth: true
-                        visible: !!setup.info.require && !setup.info.available
-                        text: "Add this line to your Hyprland Lua config. Then click I connected it."
-                        textFormat: Text.PlainText
-                        wrapMode: Text.Wrap
-                    }
-                    TextArea {
-                        Layout.fillWidth: true
-                        visible: !!setup.info.require && !setup.info.available
-                        text: setup.info.require || ""
-                        textFormat: TextEdit.PlainText
-                        readOnly: true
-                        selectByMouse: true
-                        wrapMode: TextEdit.WrapAnywhere
-                    }
-                    CheckBox {
-                        id: automatic
-                        Layout.fillWidth: true
-                        visible: setup.info.phase !== "unavailable"
-                        enabled: !setup.info.busy
-                        text: "Install and update automatically at startup"
-                        checked: !!setup.info.automatic
-                        onToggled: setup.request("preference")
-                    }
-                    Label {
-                        Layout.fillWidth: true
-                        visible: setup.info.phase !== "unavailable"
-                        text: "Installation and updates reload Hyprland. Your Hyprland config is never edited."
-                        textFormat: Text.PlainText
-                        wrapMode: Text.Wrap
-                    }
-                    Flow {
-                        Layout.fillWidth: true
-                        spacing: 8
-                        Button {
-                            text: setup.info.phase === "install" ? "Install" : "Install / update"
-                            visible: !!setup.info.path && !setup.info.available
-                            enabled: !setup.info.busy
-                            onClicked: setup.request("install")
-                        }
-                        Button {
-                            text: "I connected it"
-                            visible: !!setup.info.require && !setup.info.available
-                            enabled: !setup.info.busy
-                            onClicked: setup.request("confirm")
-                        }
-                        Button {
-                            text: "Check again"
-                            enabled: !setup.info.busy
-                            onClicked: setup.request("refresh")
-                        }
-                        Button {
-                            text: setup.info.available ? "Continue" : "Not now"
-                            onClicked: {
-                                window.integrationStartupResolved = true
-                                window.integrationOpen = false
-                                window.startShortcutSetup()
-                                if (window.shortcutStarted) window.shortcutRequest("refresh")
+                ScrollView {
+                    id: setupScroll
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    clip: true
+                    contentWidth: availableWidth
+                    ColumnLayout {
+                        width: setupScroll.availableWidth
+                        spacing: 16
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Label {
+                                text: "Hyprland integration"
+                                font.pixelSize: 18
+                                font.bold: true
+                                Layout.fillWidth: true
+                            }
+                            Label {
+                                text: setup.info.busy ? "Checking…" : setup.info.available ? "Connected" : "Not connected"
+                                color: setup.info.available ? "#93d5aa" : "#aebcca"
+                                font.pixelSize: 12
                             }
                         }
+                        Label {
+                            Layout.fillWidth: true
+                            text: setup.info.status || ""
+                            textFormat: Text.PlainText
+                            color: setup.info.phase === "error" ? "#ff8a80" : "#aebcca"
+                            wrapMode: Text.Wrap
+                        }
+                        Pane {
+                            Layout.fillWidth: true
+                            visible: !!setup.info.path
+                            padding: 16
+                            background: Rectangle { color: "#151c23"; radius: 8; border.color: "#34414e" }
+                            ColumnLayout {
+                                anchors.fill: parent
+                                spacing: 8
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    Label {
+                                        text: "1. Install module"
+                                        font.bold: true
+                                        Layout.fillWidth: true
+                                    }
+                                    Label {
+                                        visible: setup.info.module_state === "current"
+                                        text: "Up to date"
+                                        color: "#93d5aa"
+                                    }
+                                    Button {
+                                        objectName: "installIntegration"
+                                        text: setup.info.module_state === "missing" ? "Install" : "Update"
+                                        visible: setup.needsInstall
+                                        enabled: !setup.info.busy
+                                        onClicked: setup.request("install")
+                                    }
+                                }
+                                Label {
+                                    Layout.fillWidth: true
+                                    text: setup.info.path || ""
+                                    textFormat: Text.PlainText
+                                    font.family: "monospace"
+                                    font.pixelSize: 12
+                                    color: "#aebcca"
+                                    wrapMode: Text.WrapAnywhere
+                                }
+                            }
+                        }
+                        Pane {
+                            Layout.fillWidth: true
+                            visible: !!setup.info.require && !setup.info.available
+                            padding: 16
+                            background: Rectangle { color: "#151c23"; radius: 8; border.color: "#34414e" }
+                            ColumnLayout {
+                                anchors.fill: parent
+                                spacing: 10
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    Label {
+                                        text: "2. Connect to Hyprland"
+                                        font.bold: true
+                                        Layout.fillWidth: true
+                                    }
+                                    Button {
+                                        objectName: "copyIntegration"
+                                        text: setup.copied ? "Copied" : "Copy"
+                                        onClicked: {
+                                            requireCode.selectAll()
+                                            requireCode.copy()
+                                            requireCode.deselect()
+                                            setup.copied = true
+                                            copiedTimer.restart()
+                                        }
+                                    }
+                                }
+                                Label {
+                                    Layout.fillWidth: true
+                                    text: "Add this line to hyprland.lua, then reload and check the connection."
+                                    color: "#aebcca"
+                                    wrapMode: Text.Wrap
+                                }
+                                TextArea {
+                                    id: requireCode
+                                    objectName: "integrationCode"
+                                    Layout.fillWidth: true
+                                    text: setup.info.require || ""
+                                    textFormat: TextEdit.PlainText
+                                    font.family: "monospace"
+                                    font.pixelSize: 12
+                                    readOnly: true
+                                    selectByMouse: true
+                                    wrapMode: TextEdit.WrapAnywhere
+                                    onTextChanged: setup.copied = false
+                                }
+                                Button {
+                                    text: "Reload and check"
+                                    enabled: !setup.info.busy && setup.info.module_state === "current"
+                                    onClicked: setup.request("confirm")
+                                }
+                            }
+                        }
+                        CheckBox {
+                            id: automatic
+                            Layout.fillWidth: true
+                            visible: setup.info.phase !== "unavailable"
+                            enabled: !setup.info.busy
+                            text: "Install and update automatically at startup"
+                            checked: !!setup.info.automatic
+                            onToggled: setup.request("preference")
+                        }
+                        Label {
+                            Layout.fillWidth: true
+                            visible: setup.info.phase !== "unavailable"
+                            text: "Updates and connection checks reload Hyprland. Runix never edits your Hyprland config."
+                            font.pixelSize: 12
+                            color: "#aebcca"
+                            wrapMode: Text.Wrap
+                        }
                     }
+                }
+                RowLayout {
+                    Layout.fillWidth: true
+                    Button {
+                        text: "Check again"
+                        enabled: !setup.info.busy
+                        onClicked: setup.request("refresh")
+                    }
+                    Item { Layout.fillWidth: true }
+                    Button {
+                        text: setup.info.available ? "Continue" : "Not now"
+                        highlighted: true
+                        onClicked: {
+                            window.integrationStartupResolved = true
+                            window.integrationOpen = false
+                            window.startShortcutSetup()
+                            if (window.shortcutStarted) window.shortcutRequest("refresh")
+                        }
+                    }
+                }
+                Timer {
+                    id: copiedTimer
+                    interval: 2000
+                    onTriggered: setup.copied = false
                 }
             }
         }

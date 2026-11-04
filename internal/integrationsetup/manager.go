@@ -20,12 +20,13 @@ var sourceDigest = sha256.Sum256([]byte(hyprland.Source))
 
 // Snapshot describes the integration's current install and runtime state.
 type Snapshot struct {
-	Phase     string `json:"phase"`
-	Status    string `json:"status"`
-	Path      string `json:"path"`
-	Require   string `json:"require"`
-	Automatic bool   `json:"automatic"`
-	Available bool   `json:"available"`
+	Phase       string `json:"phase"`
+	Status      string `json:"status"`
+	Path        string `json:"path"`
+	Require     string `json:"require"`
+	Automatic   bool   `json:"automatic"`
+	Available   bool   `json:"available"`
+	ModuleState string `json:"module_state"`
 }
 
 // Manager coordinates installation and runtime verification of the Lua integration.
@@ -104,6 +105,13 @@ func (m *Manager) Run(ctx context.Context, action string, automatic bool) Snapsh
 			return s
 		}
 	}
+	if current {
+		s.ModuleState = "current"
+	} else if exists {
+		s.ModuleState = "stale"
+	} else {
+		s.ModuleState = "missing"
+	}
 	shouldWrite := action == "install" || action == "startup" && s.Automatic
 	if action == "confirm" && !exists {
 		s.Phase = "error"
@@ -138,6 +146,7 @@ func (m *Manager) Run(ctx context.Context, action string, automatic bool) Snapsh
 			return s
 		}
 		exists, changed, current = true, true, true
+		s.ModuleState = "current"
 		if !wasInstalled {
 			s.Path = path
 			s.Require = requireInstruction(path)
@@ -191,7 +200,7 @@ func (m *Manager) Run(ctx context.Context, action string, automatic bool) Snapsh
 	}
 	if exists && !current {
 		s.Phase = "update"
-		s.Status = "Installed module is stale; choose Install/Update to replace it and reload Hyprland."
+		s.Status = "Installed module is stale; choose Update to replace it and reload Hyprland."
 	} else if exists {
 		s.Phase = "connect"
 		s.Status = "Installed module is not connected with the current source; " +
@@ -294,7 +303,7 @@ func atomicWrite(path string, b []byte, mode os.FileMode) error {
 }
 
 func requireInstruction(path string) string {
-	return "require(" + luaQuote(strings.TrimSuffix(path, ".lua")) + ").setup()"
+	return "require(" + luaQuote(strings.TrimSuffix(path, ".lua")) + ")"
 }
 
 func luaQuote(s string) string {

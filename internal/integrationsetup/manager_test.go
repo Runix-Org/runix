@@ -55,15 +55,17 @@ func (s *managerSuite) TestFirstInstallAndExplicitConnection() {
 	ctx := context.Background()
 	initial := s.manager.Run(ctx, "startup", false)
 	s.Equal("install", initial.Phase)
+	s.Equal("missing", initial.ModuleState)
 	s.Equal(1, s.probes, "startup probes even when no file exists")
 	s.NoFileExists(initial.Path)
 	installed := s.manager.Run(ctx, "install", true)
 	s.Equal("connect", installed.Phase)
 	s.False(installed.Available)
+	s.Equal("current", installed.ModuleState)
 	s.Zero(s.reloads, "first install waits for a manual require connection")
 	s.Equal(filepath.Join(s.root, "hypr/runix.lua"), installed.Path)
 	s.Equal(hyprland.Source, s.read(installed.Path))
-	s.Equal("require(\""+filepath.Join(s.root, "hypr/runix")+"\").setup()", installed.Require)
+	s.Equal("require(\""+filepath.Join(s.root, "hypr/runix")+"\")", installed.Require)
 	s.state = hyprlandhotkey.State{Ready: true, IntegrationID: hyprland.Identity}
 	confirmed := s.manager.Run(ctx, "confirm", false)
 	s.True(confirmed.Available)
@@ -136,6 +138,7 @@ func (s *managerSuite) TestRefreshNeverInstallsEvenWithAutomaticPreference() {
 	s.put("runix/config.json", `{"integration_auto_update":true}`)
 	result := s.manager.Run(context.Background(), "refresh", false)
 	s.Equal("update", result.Phase)
+	s.Equal("stale", result.ModuleState)
 	s.Equal("old source", s.read(module))
 	s.Zero(s.reloads)
 }
@@ -156,6 +159,7 @@ func (s *managerSuite) TestFailedReloadKeepsInstalledSourceAndAllowsRepair() {
 	result := s.manager.Run(context.Background(), "install", false)
 	s.Equal("error", result.Phase)
 	s.False(result.Available)
+	s.Equal("current", result.ModuleState)
 	s.Contains(result.Status, "reload failed")
 	s.NotEmpty(result.Require)
 	s.Equal(hyprland.Source, s.read(module))
@@ -170,12 +174,15 @@ func (s *managerSuite) TestDiskAndRuntimeMustBothMatch() {
 	result := s.manager.Run(context.Background(), "refresh", false)
 	s.False(result.Available)
 	s.Equal("connect", result.Phase)
+	s.Equal("current", result.ModuleState)
 	s.state = hyprlandhotkey.State{Ready: false, IntegrationID: hyprland.Identity}
 	s.False(s.manager.Run(context.Background(), "refresh", false).Available)
 	s.state.Ready = true
 	s.True(s.manager.Run(context.Background(), "refresh", false).Available)
 	s.Require().NoError(os.WriteFile(module, []byte("different disk source"), 0o600))
-	s.False(s.manager.Run(context.Background(), "refresh", false).Available)
+	result = s.manager.Run(context.Background(), "refresh", false)
+	s.False(result.Available)
+	s.Equal("stale", result.ModuleState)
 }
 
 func (s *managerSuite) TestUnsafeDestinationsAreNotReplaced() {

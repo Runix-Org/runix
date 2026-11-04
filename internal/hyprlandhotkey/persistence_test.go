@@ -50,7 +50,7 @@ hl = {
     end,
 }
 local executable = "/tmp/runix'; touch /tmp/never-execute; '"
-local module = dofile(arg[1]).setup({ executable = executable })
+local module = loadfile(arg[1])({ executable = executable })
 local function request(op, handle)
     return module.request({version = 1, op = op, epoch = module.epoch,
         revision = module.revision, handle = handle or "", keycode = 38, modifiers = 77})

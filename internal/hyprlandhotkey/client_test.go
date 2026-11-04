@@ -91,7 +91,7 @@ func (s *clientSuite) TestPreflightRejectsUnknownAndForeignBindings() {
 	}{
 		{name: "failed inspection", failure: errors.New("socket closed")},
 		{name: "invalid inspection", binds: `null`},
-		{name: "foreign duplicate", binds: `[{"arg":"foreign","modmask":0,"submap":"",` +
+		{name: "foreign duplicate", binds: `[{"arg":"foreign","modmask":64,"submap":"",` +
 			`"submap_universal":"false","key":"","keycode":96,"catch_all":false,` +
 			`"description":"runix toggle","release":false,"repeat":false,"longPress":false,` +
 			`"locked":false,"mouse":false}]`},

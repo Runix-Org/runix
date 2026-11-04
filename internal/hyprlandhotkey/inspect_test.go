@@ -29,7 +29,7 @@ func (s *InspectionSuite) TestMalformedSnapshotsFailClosed() {
 	s.Equal("unknown", result.State)
 }
 
-func (s *InspectionSuite) TestPhysicalOverlapIgnoresModifierDifferenceAndUsesGroups() {
+func (s *InspectionSuite) TestPhysicalOverlapUsesGroups() {
 	for _, test := range []struct {
 		key  string
 		code uint32
@@ -39,7 +39,7 @@ func (s *InspectionSuite) TestPhysicalOverlapIgnoresModifierDifferenceAndUsesGro
 		{key: "exclam", code: 10},
 	} {
 		s.Run(test.key, func() {
-			binds := []byte(`[{"modmask":0,"key":"` + test.key + `","arg":"foreign"}]`)
+			binds := []byte(`[{"modmask":64,"key":"` + test.key + `","arg":"foreign"}]`)
 			result, err := inspectBindings(binds, []byte(testDevices), nil, Combination{
 				Keycode: test.code, Modifiers: 64,
 			})
@@ -47,6 +47,29 @@ func (s *InspectionSuite) TestPhysicalOverlapIgnoresModifierDifferenceAndUsesGro
 			s.Equal("foreign", result.State)
 			s.Len(result.Foreign, 1)
 			s.True(result.Potential)
+		})
+	}
+}
+
+func (s *InspectionSuite) TestForeignBindingsRequireMatchingModifiers() {
+	for _, key := range []string{`"key":"R"`, `"keycode":27`, `"key":"catchall"`} {
+		s.Run(key, func() {
+			binds := []byte(`[{"modmask":64,` + key + `}]`)
+			for _, modifiers := range []uint32{0, 1, 4, 8, 65, 68, 72, 77} {
+				result, err := inspectBindings(binds, []byte(testDevices), nil, Combination{
+					Keycode: 27, Modifiers: modifiers,
+				})
+				s.Require().NoError(err)
+				s.Equal("free", result.State, "modifiers=%d", modifiers)
+				s.Empty(result.Foreign)
+				s.False(result.Potential)
+			}
+			result, err := inspectBindings(binds, []byte(testDevices), nil, Combination{
+				Keycode: 27, Modifiers: 64,
+			})
+			s.Require().NoError(err)
+			s.Equal("foreign", result.State)
+			s.Len(result.Foreign, 1)
 		})
 	}
 }
@@ -105,7 +128,7 @@ func (s *InspectionSuite) TestOwnedAndForeignOverlapConflicts() {
 		Handle: "trusted", Arg: "runix:toggle", Keycode: 46, Modifiers: 4, Enabled: true, Action: "toggle",
 	}}
 	binds := []byte(`[{"modmask":4,"key":"L","keycode":46,"arg":"runix:toggle"},` +
-		`{"modmask":0,"key":"L","keycode":46,"arg":"foreign"}]`)
+		`{"modmask":4,"key":"L","keycode":46,"arg":"foreign"}]`)
 	result, err := inspectBindings(binds, devices, owned, Combination{Keycode: 46, Modifiers: 4})
 	s.Require().NoError(err)
 	s.Equal("conflicting", result.State)
