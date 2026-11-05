@@ -69,6 +69,7 @@ func (s *EntrySuite) TestLocalizedMetadataAndEscapes() {
 		"Name = Base\\sname\r\nName[ru]=Имя\r\nGenericName=Editor\r\nGenericName[ru]=Редактор\r\n" +
 		"Comment=Line\\nTab\\tReturn\\rSlash\\\\=kept#literal\r\nComment[ru]=Описание\r\n" +
 		"Keywords=one\\;two;three\\\\;last;;\r\nKeywords[ru]=слово;два\r\n" +
+		"Categories=Utility;Text\\;Editor;Back\\\\slash;;\r\n" +
 		"Icon=base-icon\r\nIcon[ru]=значок\r\nTryExec=not-installed\r\nPath=/tmp/work\\sspace\r\n" +
 		"Terminal=true\r\nDBusActivatable=true\r\nX-Unknown=\\q\r\n" +
 		"[Desktop Action New]\r\nName=Ignored\r\nExec=ignored\\q\r\n"
@@ -81,6 +82,7 @@ func (s *EntrySuite) TestLocalizedMetadataAndEscapes() {
 	s.Equal("Описание", entry.Comment.Selected)
 	s.Equal([]string{"one;two", "three\\", "last", ""}, entry.Keywords.Base)
 	s.Equal([]string{"слово", "два"}, entry.Keywords.Selected)
+	s.Equal([]string{"Utility", "Text;Editor", "Back\\slash", ""}, entry.Categories)
 	s.Equal(Text{Base: "base-icon", Selected: "значок"}, entry.Icon)
 	s.Equal("not-installed", entry.TryExec)
 	s.Equal("/tmp/work space", entry.Path)
@@ -161,6 +163,12 @@ func (s *EntrySuite) TestRejectsMalformedInputWithSourceContext() {
 		{"scalar semicolon escape", application + `Comment=bad\;`, "Comment"},
 		{"control character", application + "Comment=bad\x00", "Comment"},
 		{"non-ASCII string", application + "Path=/tmp/тест", "Path"},
+		{"category escape", application + `Categories=bad\q;`, "Categories"},
+		{"category truncated escape", application + "Categories=bad\\", "Categories"},
+		{"category control", application + "Categories=bad\x01;", "Categories"},
+		{"category non-ASCII", application + "Categories=Утилита;", "Categories"},
+		{"localized categories", application + "Categories=Utility;\nCategories[de]=Werkzeug;", "Categories[de]"},
+		{"hidden malformed categories", "[Desktop Entry]\nHidden=true\nCategories=bad\\q;", "Categories"},
 		{"conflicting desktops", application + "OnlyShowIn=GNOME;\nNotShowIn=GNOME;", "NotShowIn"},
 		{"missing type", "[Desktop Entry]\nName=Name\nExec=example", "Type"},
 		{"case sensitive type key", "[Desktop Entry]\ntype=Application\nName=Name\nExec=example", "Type"},
@@ -192,6 +200,7 @@ func (s *EntrySuite) TestCompleteLongInputAndListTerminators() {
 	name := strings.Repeat("n", 70000)
 	entry := s.parse(strings.ReplaceAll(application, "Name=Base", "Name="+name), Environment{})
 	s.Equal(name, entry.Name.Base)
+	s.Nil(entry.Categories)
 	for _, test := range []struct {
 		raw  string
 		want []string
@@ -207,6 +216,8 @@ func (s *EntrySuite) TestCompleteLongInputAndListTerminators() {
 			parsed := s.parse(application+"Keywords="+test.raw, Environment{})
 			s.Equal(test.want, parsed.Keywords.Base)
 			s.Equal(test.want, parsed.Keywords.Selected)
+			categories := s.parse(application+"Categories="+test.raw, Environment{})
+			s.Equal(test.want, categories.Categories)
 		})
 	}
 }

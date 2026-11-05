@@ -66,6 +66,8 @@ func (s *CatalogSuite) TestWinnersMaskLowerRootsBeforeFiltering() {
 		valid      bool
 	}{
 		{"hidden", "[Desktop Entry]\nHidden=true\n", true},
+		{"hidden with metadata", "[Desktop Entry]\nHidden=true\nCategories=Utility;\nComment=Hidden;\n", true},
+		{"invalid categories", application + "Categories=bad\\q;\n", false},
 		{"invalid", "invalid data", false},
 		{"no display", application + "NoDisplay=true\n", true},
 		{"session", application + "OnlyShowIn=Other;\n", true},
@@ -77,7 +79,7 @@ func (s *CatalogSuite) TestWinnersMaskLowerRootsBeforeFiltering() {
 			high, low := filepath.Join(base, "high"), filepath.Join(base, "low")
 			path := filepath.Join(high, "app.desktop")
 			s.write(path, test.data)
-			s.write(filepath.Join(low, "app.desktop"), application)
+			s.write(filepath.Join(low, "app.desktop"), application+"Categories=Lower;\nComment=Lower comment\n")
 			config := CatalogConfig{Roots: []string{high, low}}
 			snapshot := s.discover(config)
 			s.Empty(snapshot.Applications())
@@ -94,7 +96,8 @@ func (s *CatalogSuite) TestWinnersMaskLowerRootsBeforeFiltering() {
 func (s *CatalogSuite) TestLogicalOrderingCollisionsAndImmutableMetadata() {
 	root := s.T().TempDir()
 	s.write(filepath.Join(root, "foo", "bar.desktop"), strings.ReplaceAll(application, "Name=Base", "Name=Nested"))
-	s.write(filepath.Join(root, "foo-bar.desktop"), application+"Keywords=one;two;\nOnlyShowIn=Test;\n")
+	s.write(filepath.Join(root, "foo-bar.desktop"), application+
+		"Keywords=one;two;\nCategories=Utility;Editor;\nOnlyShowIn=Test;\n")
 	s.write(filepath.Join(root, "z.desktop"), strings.ReplaceAll(application, "Name=Base", "Name=alpha"))
 	s.write(filepath.Join(root, "a.desktop"), strings.ReplaceAll(application, "Name=Base", "Name=ALPHA"))
 	snapshot := s.discover(CatalogConfig{Roots: []string{root, root}, Environment: Environment{CurrentDesktop: "Test"}})
@@ -108,14 +111,18 @@ func (s *CatalogSuite) TestLogicalOrderingCollisionsAndImmutableMetadata() {
 	record.Entry.Keywords.Base[0] = "mutated"
 	record.Entry.Keywords.Selected[0] = "mutated"
 	record.Entry.OnlyShowIn[0] = "mutated"
+	record.Entry.Categories[0] = "mutated"
 	apps := snapshot.Applications()
 	apps[2].Entry.Keywords.Base[0] = "also mutated"
+	apps[2].Entry.Categories[1] = "also mutated"
 	diagnostics := snapshot.Diagnostics()
 	diagnostics[0].Code = "mutated"
 	again, _ := snapshot.Lookup("foo-bar.desktop")
 	s.Equal([]string{"one", "two"}, again.Entry.Keywords.Base)
 	s.Equal([]string{"one", "two"}, again.Entry.Keywords.Selected)
 	s.Equal([]string{"Test"}, again.Entry.OnlyShowIn)
+	s.Equal([]string{"Utility", "Editor"}, again.Entry.Categories)
+	s.Equal([]string{"Utility", "Editor"}, snapshot.Applications()[2].Entry.Categories)
 	s.Equal("id-collision", snapshot.Diagnostics()[0].Code)
 }
 

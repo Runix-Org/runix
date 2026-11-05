@@ -68,6 +68,26 @@ func (s *SearchSuite) TestTypedMetadataRemainsImmutableAcrossSearches() {
 	s.Equal("original", second[0].Fields[0].Value)
 }
 
+func (s *SearchSuite) TestDeduplicationPreservesKindsAndValueBoundaries() {
+	fields := DeduplicateFields([]Field{
+		{Kind: FieldName, Value: " Base\tName "},
+		{Kind: FieldName, Value: "base name"},
+		{Kind: FieldGenericName, Value: "BASE NAME"},
+		{Kind: FieldKeyword, Value: "one"},
+		{Kind: FieldKeyword, Value: "two"},
+		{Kind: FieldComment, Value: " \t"},
+	})
+	s.Equal([]Field{
+		{Kind: FieldName, Value: " Base\tName "},
+		{Kind: FieldGenericName, Value: "BASE NAME"},
+		{Kind: FieldKeyword, Value: "one"},
+		{Kind: FieldKeyword, Value: "two"},
+	}, fields)
+	index := NewIndex([]Record{{ID: "item", Fields: fields}})
+	s.Len(index.Search(context.Background(), "base two"), 1)
+	s.Empty(index.Search(context.Background(), "onetwo"))
+}
+
 func (s *SearchSuite) TestControllerRejectsIgnoringCancellationAndCoalescesBurst() {
 	started := make(chan string, 8)
 	releaseOld := make(chan struct{})

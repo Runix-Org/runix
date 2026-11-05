@@ -90,19 +90,26 @@ func (p *Provider) install(snapshot *Snapshot, invalidated []string) error {
 		} else if validThemeIcon(icon) {
 			item.IconName = icon
 		}
-		item.Fields = []search.Field{
-			{Kind: search.FieldName, Value: entry.Name.Base},
-			{Kind: search.FieldName, Value: entry.Name.Selected},
-			{Kind: search.FieldGenericName, Value: entry.GenericName.Base},
-			{Kind: search.FieldGenericName, Value: entry.GenericName.Selected},
-			{Kind: search.FieldID, Value: app.Source.ID},
-		}
+		capacity := 7 + len(entry.Keywords.Base) + len(entry.Keywords.Selected) + len(entry.Categories)
+		item.Fields = append(make([]search.Field, 0, capacity),
+			search.Field{Kind: search.FieldName, Value: entry.Name.Base},
+			search.Field{Kind: search.FieldName, Value: entry.Name.Selected},
+			search.Field{Kind: search.FieldGenericName, Value: entry.GenericName.Base},
+			search.Field{Kind: search.FieldGenericName, Value: entry.GenericName.Selected},
+			search.Field{Kind: search.FieldComment, Value: entry.Comment.Base},
+			search.Field{Kind: search.FieldComment, Value: entry.Comment.Selected},
+			search.Field{Kind: search.FieldID, Value: app.Source.ID},
+		)
 		for _, value := range entry.Keywords.Base {
 			item.Fields = append(item.Fields, search.Field{Kind: search.FieldKeyword, Value: value})
 		}
 		for _, value := range entry.Keywords.Selected {
 			item.Fields = append(item.Fields, search.Field{Kind: search.FieldKeyword, Value: value})
 		}
+		for _, value := range entry.Categories {
+			item.Fields = append(item.Fields, search.Field{Kind: search.FieldCategory, Value: value})
+		}
+		item.Fields = search.DeduplicateFields(item.Fields)
 		projected = append(projected, item)
 	}
 	diagnostics := snapshot.Diagnostics()

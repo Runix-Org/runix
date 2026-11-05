@@ -29,8 +29,9 @@ func (s *ProviderSuite) TestProjectionAndTypedSearchMetadata() {
 	root := s.T().TempDir()
 	path := filepath.Join(root, "app.desktop")
 	data := "[Desktop Entry]\nType=Application\nName=Base Name\nName[fr]=Nom\n" +
-		"GenericName=Editor\nComment=A comment\nKeywords=HiddenWord;Other;\nKeywords[fr]=MotSecret;\n" +
-		"Icon=bad/name\nExec=/bin/true\n"
+		"GenericName=Editor\nGenericName[fr]=Rédacteur\nComment=HiddenComment\nComment[fr]=Commentaire\n" +
+		"Keywords=HiddenWord;Other;hiddenword;\\s;\nKeywords[fr]=MotSecret;OTHER;\n" +
+		"Categories=Utility;Text\\;Editor;utility;\nIcon=bad/name\nExec=/bin/true secret-exec\n"
 	s.Require().NoError(os.WriteFile(path, []byte(data), 0o600))
 	provider := NewProvider(CatalogConfig{Roots: []string{root}, Environment: Environment{Lang: "fr"}}, nil)
 	defer provider.Close()
@@ -51,7 +52,7 @@ func (s *ProviderSuite) TestProjectionAndTypedSearchMetadata() {
 	s.Require().Len(items, 1)
 	item := items[0]
 	s.Equal("Nom", item.Title)
-	s.Equal("Editor", item.Subtitle)
+	s.Equal("Rédacteur", item.Subtitle)
 	s.Empty(item.IconName)
 	s.Empty(item.IconPath)
 	s.Equal(uint64(1), update.Snapshot.Generation())
@@ -69,12 +70,27 @@ func (s *ProviderSuite) TestProjectionAndTypedSearchMetadata() {
 	s.True(contains(search.FieldKeyword, "HiddenWord"))
 	s.True(contains(search.FieldID, "app.desktop"))
 	s.True(contains(search.FieldKeyword, "MotSecret"))
+	s.True(contains(search.FieldGenericName, "Rédacteur"))
+	s.True(contains(search.FieldComment, "HiddenComment"))
+	s.True(contains(search.FieldComment, "Commentaire"))
+	s.True(contains(search.FieldCategory, "Text;Editor"))
+	s.False(contains(search.FieldKeyword, "hiddenword"))
+	s.False(contains(search.FieldKeyword, "OTHER"))
+	s.False(contains(search.FieldKeyword, " "))
+	s.False(contains(search.FieldCategory, "utility"))
 	index := search.NewIndex([]search.Record{{
 		ID: item.ID, Title: item.Title, Subtitle: item.Subtitle, Fields: item.Fields,
 	}})
 	s.Len(index.Search(context.Background(), "base name hiddenword"), 1)
-	s.Len(index.Search(context.Background(), "nom editor"), 1)
-	s.Len(index.Search(context.Background(), "motsecret"), 1)
+	for _, query := range []string{
+		"nom editor", "rédacteur", "motsecret", "hiddencomment", "commentaire", "utility", "text;editor", "app.desktop",
+	} {
+		s.Len(index.Search(context.Background(), query), 1, query)
+	}
+	for _, query := range []string{"wordother", "utilitytext", "secret-exec", root} {
+		s.Empty(index.Search(context.Background(), query), query)
+	}
+	s.Equal("Rédacteur", index.Search(context.Background(), "hiddencomment")[0].Subtitle)
 }
 
 func (s *ProviderSuite) TestRegistryLaunchAndRejectsRemovedTarget() {

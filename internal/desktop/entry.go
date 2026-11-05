@@ -57,6 +57,7 @@ type Entry struct {
 	GenericName     Text
 	Comment         Text
 	Keywords        TextList
+	Categories      []string
 	Icon            Text
 	Hidden          bool
 	NoDisplay       bool
@@ -221,7 +222,7 @@ func parseEntry(values fields, source Source, environment Environment) (Entry, e
 				return Entry{}, fail(key, "expected true or false")
 			}
 		case "Name", "GenericName", "Comment", "Keywords", "Icon",
-			"Type", "Exec", "TryExec", "Path", "OnlyShowIn", "NotShowIn":
+			"Type", "Exec", "TryExec", "Path", "OnlyShowIn", "NotShowIn", "Categories":
 			canLocalize := slices.Contains([]string{"Name", "GenericName", "Comment", "Keywords", "Icon"}, base)
 			if localized && !canLocalize {
 				return Entry{}, fail(key, "this key cannot be localized")
@@ -231,7 +232,7 @@ func parseEntry(values fields, source Source, environment Environment) (Entry, e
 					return Entry{}, fail(key, "localized value requires a base value")
 				}
 			}
-			list := base == "Keywords" || base == "OnlyShowIn" || base == "NotShowIn"
+			list := base == "Keywords" || base == "OnlyShowIn" || base == "NotShowIn" || base == "Categories"
 			parts, decodeErr := decodeValue(item.value, list, canLocalize)
 			if decodeErr != nil {
 				return Entry{}, fail(key, decodeErr.Error())
@@ -265,6 +266,7 @@ func parseEntry(values fields, source Source, environment Environment) (Entry, e
 	entry.Comment = localizedText(decoded, "Comment", locales)
 	entry.Icon = localizedText(decoded, "Icon", locales)
 	entry.Keywords = TextList{Base: decoded["Keywords"], Selected: selectValue(decoded, "Keywords", locales)}
+	entry.Categories = decoded["Categories"]
 	entry.Exec = ExecValue{Raw: values["Exec"].value, Decoded: scalar(decoded, "Exec")}
 	entry.DBusActivatable = values["DBusActivatable"].value == "true"
 	if strings.TrimSpace(entry.Name.Base) == "" {

@@ -90,6 +90,27 @@ func normalize(s string) string {
 	return strings.ToLower(strings.Join(strings.Fields(s), " "))
 }
 
+// DeduplicateFields removes empty and normalized equivalent values within each kind.
+// It compacts the caller-owned slice in place and preserves the first original value.
+func DeduplicateFields(fields []Field) []Field {
+	seen := make(map[Field]struct{}, len(fields))
+	n := 0
+	for _, field := range fields {
+		key := Field{Kind: field.Kind, Value: normalize(field.Value)}
+		if key.Value == "" {
+			continue
+		}
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		seen[key] = struct{}{}
+		fields[n] = field
+		n++
+	}
+	clear(fields[n:])
+	return fields[:n]
+}
+
 type candidate struct {
 	item  *indexedRecord
 	score int

@@ -128,6 +128,7 @@ func (snapshot *Snapshot) Diagnostics() []Diagnostic { return slices.Clone(snaps
 func cloneRecord(record Record) Record {
 	record.Entry.Keywords.Base = slices.Clone(record.Entry.Keywords.Base)
 	record.Entry.Keywords.Selected = slices.Clone(record.Entry.Keywords.Selected)
+	record.Entry.Categories = slices.Clone(record.Entry.Categories)
 	record.Entry.OnlyShowIn = slices.Clone(record.Entry.OnlyShowIn)
 	record.Entry.NotShowIn = slices.Clone(record.Entry.NotShowIn)
 	return record
