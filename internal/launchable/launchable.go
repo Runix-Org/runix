@@ -161,11 +161,11 @@ func (c *Catalog) Records() []search.Record {
 	return cloneRecords(c.records)
 }
 
-func (c *Catalog) Search(ctx context.Context, q string) []search.Record {
+func (c *Catalog) Search(ctx context.Context, q string, counts map[string]int64) []search.Record {
 	if c == nil || c.index == nil {
 		return nil
 	}
-	r := c.index.Search(ctx, q)
+	r := c.index.SearchWithUsage(ctx, q, counts)
 	for i := range r {
 		fields := r[i].Fields
 		r[i] = c.byID[r[i].ID]
@@ -364,7 +364,7 @@ func buildCatalog(snaps map[string]*Snapshot, prev *Catalog) *Catalog {
 		for _, it := range s.items {
 			id := (Identity{pid, it.ID}).String()
 			rec := search.Record{
-				ID: id, DisplayID: it.ID, Title: it.Title, Subtitle: it.Subtitle,
+				ID: id, ProviderID: pid, DisplayID: it.ID, Title: it.Title, Subtitle: it.Subtitle,
 				IconName: it.IconName, IconPath: it.IconPath, CatalogGeneration: s.Generation(),
 				Fields: append([]search.Field{}, it.Fields...),
 			}

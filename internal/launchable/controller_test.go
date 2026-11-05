@@ -262,3 +262,48 @@ func (s *LaunchControllerSuite) TestHandoffReceivesFiveSecondDeadline() {
 	once.Do(func() { close(release) })
 	h.deliver(s)
 }
+
+func (s *LaunchControllerSuite) TestAccountingSurvivesCatalogVisibilityAndQueuedDelivery() {
+	h := s.newHarness()
+	release := make(chan struct{})
+	counted := make(chan Identity, 2)
+	c := NewLaunchController(func(context.Context, Target) error { <-release; return nil }, h.post, h.changed)
+	defer c.Stop()
+	c.SetSuccessHandler(func(id Identity) { counted <- id })
+	c.SetCatalog(controllerCatalog(1, "app.desktop"))
+	c.VisibilityChanged(true)
+	s.True(c.Submit(controllerID("app.desktop"), 1))
+	s.False(c.Submit(controllerID("app.desktop"), 1))
+	c.SetCatalog(controllerCatalog(2, "other.desktop"))
+	c.Select(controllerID("other.desktop"))
+	c.VisibilityChanged(false)
+	c.VisibilityChanged(true)
+	close(release)
+	select {
+	case id := <-counted:
+		s.Equal(Identity{"desktop", "app.desktop"}, id)
+	case <-time.After(time.Second):
+		s.FailNow("successful handoff was not accounted before GUI delivery")
+	}
+	c.Stop()
+	h.deliver(s)
+	s.Equal("submitting", c.state.Phase, "stopped GUI delivery must not undo accounting")
+	s.Empty(counted)
+}
+
+func (s *LaunchControllerSuite) TestRejectedAndFailedAttemptsDoNotCount() {
+	for _, failure := range []error{errors.New("failed"), context.DeadlineExceeded, context.Canceled} {
+		s.Run(failure.Error(), func() {
+			h := s.newHarness()
+			counted := make(chan Identity, 1)
+			c := NewLaunchController(func(context.Context, Target) error { return failure }, h.post, h.changed)
+			defer c.Stop()
+			c.SetSuccessHandler(func(id Identity) { counted <- id })
+			c.SetCatalog(controllerCatalog(2, "app.desktop"))
+			s.False(c.Submit(controllerID("app.desktop"), 1))
+			s.True(c.Submit(controllerID("app.desktop"), 2))
+			h.deliver(s)
+			s.Empty(counted)
+		})
+	}
+}

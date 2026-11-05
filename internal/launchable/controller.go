@@ -24,6 +24,7 @@ type (
 	LaunchController struct {
 		handoff      func(context.Context, Target) error
 		post         func(func())
+		success      func(Identity)
 		changed      func(LaunchOutcome)
 		catalog      *Catalog
 		state        LaunchState
@@ -41,6 +42,12 @@ func NewLaunchController(
 	handoff func(context.Context, Target) error, post func(func()), changed func(LaunchOutcome),
 ) *LaunchController {
 	return &LaunchController{handoff: handoff, post: post, changed: changed, state: LaunchState{Phase: "idle"}}
+}
+
+// SetSuccessHandler installs the thread-safe accounting callback before submitting work.
+// It runs on the handoff worker, independently of GUI delivery and visibility.
+func (c *LaunchController) SetSuccessHandler(success func(Identity)) {
+	c.success = success
 }
 
 func (c *LaunchController) emit(hide bool) {
@@ -94,6 +101,9 @@ func (c *LaunchController) Submit(id string, generation uint64) bool {
 		defer c.workers.Done()
 		err := c.handoff(ctx, target)
 		cancel()
+		if err == nil && c.success != nil {
+			c.success(a.target.Identity)
+		}
 		if c.post != nil {
 			c.post(func() { c.complete(a, err) })
 		}

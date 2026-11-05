@@ -239,3 +239,28 @@ func (s *LaunchableSuite) TestRegistryCloseCancelsAndJoinsExecution() {
 	s.True(providerClosed)
 	s.Error(r.Execute(context.Background(), target))
 }
+
+func (s *LaunchableSuite) TestUsageRefreshPreservesSourceGenerationAndNamespaces() {
+	catalog := buildCatalog(map[string]*Snapshot{
+		"alpha": testSnapshot(3, "same"),
+		"beta":  testSnapshot(7, "same"),
+	}, nil)
+	id := Identity{"beta", "same"}
+	_, before, ok := catalog.Lookup(id.String())
+	s.Require().True(ok)
+	revision := catalog.Generation()
+	initial := catalog.Search(context.Background(), "", nil)
+	s.Require().Len(initial, 2)
+	s.Equal((Identity{"alpha", "same"}).String(), initial[0].ID)
+	ranked := catalog.Search(context.Background(), "", map[string]int64{
+		id.String():                            1,
+		(Identity{"missing", "same"}).String(): 100,
+	})
+	s.Require().Len(ranked, 2)
+	s.Equal(id.String(), ranked[0].ID)
+	s.Equal(uint64(7), ranked[0].CatalogGeneration)
+	_, after, ok := catalog.Lookup(id.String())
+	s.True(ok)
+	s.Equal(before, after)
+	s.Equal(revision, catalog.Generation())
+}

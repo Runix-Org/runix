@@ -34,6 +34,8 @@ type Record struct {
 	ID, Title, Subtitle, Category string
 	// DisplayID is a human-readable local identity, separate from the opaque UI key.
 	DisplayID string
+	// ProviderID distinguishes namespaced identities in merged catalogs.
+	ProviderID string
 	// CatalogGeneration identifies the immutable source snapshot, independently of query generations.
 	CatalogGeneration uint64
 	// Fields contains typed non-display metadata. Nil uses the presentation fields and ID.
@@ -49,9 +51,10 @@ type Find func(context.Context, string) []Record
 const resultLimit = 200
 
 type indexedRecord struct {
-	record  Record
-	fields  []string
-	ordinal int
+	record     Record
+	fields     []string
+	titleLower string
+	ordinal    int
 }
 
 // Index stores pre-normalized records for repeated searches.
@@ -78,7 +81,7 @@ func NewIndex(records []Record) *Index {
 			}
 		}
 		r.Fields = slices.Clone(r.Fields)
-		i.records[n] = indexedRecord{record: r, fields: fields, ordinal: n}
+		i.records[n] = indexedRecord{record: r, fields: fields, titleLower: strings.ToLower(r.Title), ordinal: n}
 	}
 	return i
 }
@@ -90,6 +93,8 @@ func normalize(s string) string {
 type candidate struct {
 	item  *indexedRecord
 	score int
+	count int64
+	usage bool
 }
 
 type worstHeap []candidate
@@ -119,6 +124,21 @@ func better(a, b candidate) bool {
 	if a.score != b.score {
 		return a.score > b.score
 	}
+	if a.usage {
+		if a.count != b.count {
+			return a.count > b.count
+		}
+		if a.item.titleLower != b.item.titleLower {
+			return a.item.titleLower < b.item.titleLower
+		}
+		if a.item.record.ProviderID != b.item.record.ProviderID {
+			return a.item.record.ProviderID < b.item.record.ProviderID
+		}
+		if a.item.record.DisplayID != b.item.record.DisplayID {
+			return a.item.record.DisplayID < b.item.record.DisplayID
+		}
+		return a.item.record.ID < b.item.record.ID
+	}
 	if a.item.ordinal != b.item.ordinal {
 		return a.item.ordinal < b.item.ordinal
 	}
@@ -133,15 +153,21 @@ func better(a, b candidate) bool {
 // than sorting all matches. Empty queries return the first 200 records in
 // original order.
 func (i *Index) Search(ctx context.Context, query string) []Record {
+	return i.search(ctx, query, nil, false)
+}
+
+// SearchWithUsage ranks textual matches before usage and stable identity.
+func (i *Index) SearchWithUsage(ctx context.Context, query string, counts map[string]int64) []Record {
+	return i.search(ctx, query, counts, true)
+}
+
+func (i *Index) search(ctx context.Context, query string, counts map[string]int64, useUsage bool) []Record {
 	if i == nil {
 		return nil
 	}
 	tokens := strings.Fields(normalize(query))
-	if len(tokens) == 0 {
-		n := len(i.records)
-		if n > resultLimit {
-			n = resultLimit
-		}
+	if len(tokens) == 0 && !useUsage {
+		n := min(len(i.records), resultLimit)
 		out := make([]Record, n)
 		for j := range n {
 			out[j] = i.records[j].record
@@ -149,7 +175,6 @@ func (i *Index) Search(ctx context.Context, query string) []Record {
 		}
 		return out
 	}
-
 	matches := make(worstHeap, 0, resultLimit)
 	for n := range i.records {
 		if n&255 == 0 {
@@ -160,11 +185,14 @@ func (i *Index) Search(ctx context.Context, query string) []Record {
 			}
 		}
 		item := &i.records[n]
-		score, ok := scoreRecord(item, tokens)
+		score, ok := 0, len(tokens) == 0
+		if len(tokens) != 0 {
+			score, ok = scoreRecord(item, tokens)
+		}
 		if !ok {
 			continue
 		}
-		match := candidate{item: item, score: score}
+		match := candidate{item: item, score: score, count: counts[item.record.ID], usage: useUsage}
 		if len(matches) < resultLimit {
 			heap.Push(&matches, match)
 		} else if better(match, matches[0]) {
@@ -172,13 +200,12 @@ func (i *Index) Search(ctx context.Context, query string) []Record {
 			heap.Fix(&matches, 0)
 		}
 	}
-
-	// The heap contains at most 200 candidates, so insertion sorting this slice
-	// is bounded independently of the number of matches.
 	for n := 1; n < len(matches); n++ {
-		match := matches[n]
-		position := n
-		for position > 0 && better(match, matches[position-1]) {
+		match, position := matches[n], n
+		for position > 0 {
+			if !better(match, matches[position-1]) {
+				break
+			}
 			matches[position] = matches[position-1]
 			position--
 		}

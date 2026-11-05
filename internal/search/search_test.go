@@ -199,3 +199,38 @@ func receive[T any](s *SearchSuite, values <-chan T) T {
 		return zero
 	}
 }
+
+func (s *SearchSuite) TestUsageRankingBeforeLimitAndTextBeforeCount() {
+	records := make([]Record, 500)
+	for n := range records {
+		records[n] = Record{
+			ID: fmt.Sprintf("%03d", n), Title: "Alpha", ProviderID: "desktop",
+			DisplayID: fmt.Sprintf("%03d", n),
+		}
+	}
+	index := NewIndex(records)
+	for _, query := range []string{"", "alpha"} {
+		got := index.SearchWithUsage(context.Background(), query, map[string]int64{"499": 5, "498": 2})
+		s.Require().Len(got, resultLimit)
+		s.Equal([]string{"499", "498", "000"}, recordIDs(got[:3]))
+		s.Equal("197", got[199].ID)
+	}
+	index = NewIndex([]Record{
+		{ID: "popular", Title: "Alphabet"},
+		{ID: "exact", Title: "Alpha"},
+		{ID: "absent", Title: "Other"},
+	})
+	s.Equal([]string{"exact", "popular"}, recordIDs(index.SearchWithUsage(context.Background(), "alpha",
+		map[string]int64{"popular": 100, "absent": 1000})))
+}
+
+func (s *SearchSuite) TestUsageTiesUseNameAndFullIdentity() {
+	index := NewIndex([]Record{
+		{ID: "encoded-a", Title: "zeta", ProviderID: "a", DisplayID: "a"},
+		{ID: "encoded-b", Title: "Alpha", ProviderID: "b", DisplayID: "a"},
+		{ID: "encoded-c", Title: "alpha", ProviderID: "a", DisplayID: "b"},
+		{ID: "encoded-z", Title: "ALPHA", ProviderID: "a", DisplayID: "a"},
+	})
+	s.Equal([]string{"encoded-z", "encoded-c", "encoded-b", "encoded-a"},
+		recordIDs(index.SearchWithUsage(context.Background(), "", nil)))
+}

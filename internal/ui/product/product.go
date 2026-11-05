@@ -22,6 +22,7 @@ import (
 	"runix/internal/ui/launcher"
 	"runix/internal/ui/searchview"
 	"runix/internal/ui/windowpolicy"
+	"runix/internal/usage"
 )
 
 //go:embed Main.qml
@@ -69,6 +70,7 @@ func Run(args []string, options Options) error {
 	failed := false
 	state := qt.NewQAbstractListModel()
 	activationError := ""
+	historyWarning := ""
 	state.OnRowCount(func(parent *qt.QModelIndex) int {
 		if parent.IsValid() {
 			return 0
@@ -79,10 +81,12 @@ func Run(args []string, options Options) error {
 	const loadingRole = statusRole + 1
 	const failedRole = loadingRole + 1
 	const activationErrorRole = failedRole + 1
+	const historyWarningRole = activationErrorRole + 1
 	state.OnRoleNames(func(_ func() map[int][]byte) map[int][]byte {
 		return map[int][]byte{
 			statusRole: []byte("status"), loadingRole: []byte("loading"), failedRole: []byte("failed"),
 			activationErrorRole: []byte("activation_error"),
+			historyWarningRole:  []byte("history_warning"),
 		}
 	})
 	state.OnData(func(index *qt.QModelIndex, role int) *qt.QVariant {
@@ -98,6 +102,8 @@ func Run(args []string, options Options) error {
 			return qt.NewQVariant8(failed)
 		case activationErrorRole:
 			return qt.NewQVariant14(activationError)
+		case historyWarningRole:
+			return qt.NewQVariant14(historyWarning)
 		default:
 			return qt.NewQVariant()
 		}
@@ -111,6 +117,38 @@ func Run(args []string, options Options) error {
 		defer index.Delete()
 		state.DataChanged(index, index)
 	}
+	var results *searchview.Adapter
+	var historyDeliveryMu sync.Mutex
+	historyDeliveryScheduled := false
+	var history *usage.Session
+	history = usage.NewSession(usage.Environment{
+		StateHome: os.Getenv("XDG_STATE_HOME"), Home: os.Getenv("HOME"),
+	}, func() {
+		historyDeliveryMu.Lock()
+		if historyDeliveryScheduled {
+			historyDeliveryMu.Unlock()
+			return
+		}
+		historyDeliveryScheduled = true
+		historyDeliveryMu.Unlock()
+		mainthread.Start(func() {
+			historyDeliveryMu.Lock()
+			historyDeliveryScheduled = false
+			historyDeliveryMu.Unlock()
+			if stopped {
+				return
+			}
+			historyWarning = history.Snapshot().Warning
+			if historyWarning != "" {
+				historyWarning = "History: " + historyWarning
+			}
+			notifyState()
+			if results != nil {
+				results.RefreshCatalog(false)
+			}
+		})
+	})
+	defer history.Close()
 	engine.RootContext().SetContextProperty("catalogState", state.QObject)
 	find := func(queryContext context.Context, query string) []search.Record {
 		select {
@@ -122,7 +160,7 @@ func Run(args []string, options Options) error {
 		if current == nil {
 			return nil
 		}
-		return current.Search(queryContext, query)
+		return current.Search(queryContext, query, history.Snapshot().Counts)
 	}
 	var launches *launchAdapter
 	var integration *integrationAdapter
@@ -164,6 +202,7 @@ func Run(args []string, options Options) error {
 		if lifecycle != nil {
 			lifecycle.Stop()
 		}
+		history.Close()
 		stopWindow()
 		results.Stop()
 		qt.QCoreApplication_SendPostedEvents2(nil, int(qt.QEvent__MetaCall))
@@ -194,6 +233,7 @@ func Run(args []string, options Options) error {
 		failed = true
 		notifyState()
 	})
+	launches.controller.SetSuccessHandler(history.Success)
 	url := qt.NewQUrl3("qrc:/runix/product/Main.qml")
 	defer url.Delete()
 	engine.LoadData2(document, url)

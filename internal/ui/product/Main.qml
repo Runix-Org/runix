@@ -488,6 +488,14 @@ ApplicationWindow {
                     wrapMode: Text.Wrap
                     color: "#ff8a80"
                 }
+                Label {
+                    Layout.fillWidth: true
+                    visible: model.history_warning !== ""
+                    text: model.history_warning
+                    textFormat: Text.PlainText
+                    wrapMode: Text.Wrap
+                    color: "#f0c674"
+                }
                 Repeater {
                     model: searchState
                     delegate: ColumnLayout {
