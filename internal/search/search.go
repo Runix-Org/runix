@@ -48,46 +48,61 @@ type Record struct {
 // cancellation; the controller still prevents obsolete results from applying.
 type Find func(context.Context, string) []Record
 
-const resultLimit = 200
+type indexedField struct {
+	kind                 FieldKind
+	original, normalized string
+	words                []string
+	priority             int
+}
 
 type indexedRecord struct {
 	record     Record
-	fields     []string
+	fields     []indexedField
 	titleLower string
 	ordinal    int
 }
 
-// Index stores pre-normalized records for repeated searches.
+// Index owns preprocessed values and a policy snapshot for repeated searches.
 type Index struct {
 	records []indexedRecord
+	policy  Policy
 }
 
-// NewIndex builds an index. Original order is retained for deterministic ties.
-func NewIndex(records []Record) *Index {
-	i := &Index{records: make([]indexedRecord, len(records))}
+// NewIndex builds an immutable index. Search retains original-order ties for the laboratory;
+// SearchWithUsage applies product usage/name/identity ties.
+func NewIndex(records []Record, policy Policy) *Index {
+	if policy.ResultLimit <= 0 || policy.Normalize == nil {
+		panic("search: policy requires a positive result limit and a normalizer")
+	}
+	i := &Index{records: make([]indexedRecord, len(records)), policy: policy}
 	for n, r := range records {
-		fields := make([]string, 0, len(r.Fields)+3)
-		for _, value := range []string{r.Title, r.Subtitle, r.Category} {
-			if value != "" {
-				fields = append(fields, normalize(value))
+		fields := r.Fields
+		if fields == nil {
+			fields = []Field{
+				{Kind: FieldName, Value: r.Title},
+				{Kind: FieldGenericName, Value: r.Subtitle},
+				{Kind: FieldCategory, Value: r.Category},
+				{Kind: FieldID, Value: r.ID},
 			}
 		}
-		if r.Fields == nil {
-			fields = append(fields, normalize(r.ID))
-		}
-		for _, field := range r.Fields {
-			if field.Value != "" {
-				fields = append(fields, normalize(field.Value))
+		item := indexedRecord{record: r, titleLower: policy.Normalize(r.Title), ordinal: n}
+		seen := make(map[Field]struct{}, len(fields))
+		for _, field := range fields {
+			value := policy.Normalize(field.Value)
+			key := Field{Kind: field.Kind, Value: value}
+			if _, exists := seen[key]; exists || value == "" {
+				continue
 			}
+			seen[key] = struct{}{}
+			item.fields = append(item.fields, indexedField{
+				kind: field.Kind, original: originalValue(field.Value), normalized: value,
+				words: splitWords(value), priority: policy.fieldRank(field.Kind),
+			})
 		}
-		r.Fields = slices.Clone(r.Fields)
-		i.records[n] = indexedRecord{record: r, fields: fields, titleLower: strings.ToLower(r.Title), ordinal: n}
+		item.record.Fields = slices.Clone(r.Fields)
+		i.records[n] = item
 	}
 	return i
-}
-
-func normalize(s string) string {
-	return strings.ToLower(strings.Join(strings.Fields(s), " "))
 }
 
 // DeduplicateFields removes empty and normalized equivalent values within each kind.
@@ -112,10 +127,10 @@ func DeduplicateFields(fields []Field) []Field {
 }
 
 type candidate struct {
-	item  *indexedRecord
-	score int
-	count int64
-	usage bool
+	item    *indexedRecord
+	quality quality
+	count   int64
+	usage   bool
 }
 
 type worstHeap []candidate
@@ -142,8 +157,8 @@ func (h *worstHeap) Pop() any {
 }
 
 func better(a, b candidate) bool {
-	if a.score != b.score {
-		return a.score > b.score
+	if order := compareQuality(a.quality, b.quality); order != 0 {
+		return order < 0
 	}
 	if a.usage {
 		if a.count != b.count {
@@ -166,13 +181,8 @@ func better(a, b candidate) bool {
 	return a.item.record.ID < b.item.record.ID
 }
 
-// Search matches case-insensitive whitespace-delimited tokens across presentation
-// and typed metadata values; every token must match. An explicit field list keeps
-// the UI identity encoding out of searchable metadata. Each token scores 100 for
-// an exact field, 50 for a prefix, or 10 for a substring. Ties retain original
-// input order. A bounded heap retains only the best 200 rather
-// than sorting all matches. Empty queries return the first 200 records in
-// original order.
+// Search matches every normalized query token against independent typed values.
+// Policy owns textual quality and top-K; equal quality retains original order.
 func (i *Index) Search(ctx context.Context, query string) []Record {
 	return i.search(ctx, query, nil, false)
 }
@@ -186,9 +196,13 @@ func (i *Index) search(ctx context.Context, query string, counts map[string]int6
 	if i == nil {
 		return nil
 	}
-	tokens := strings.Fields(normalize(query))
+	query = i.policy.Normalize(query)
+	tokens := strings.Fields(query)
+	if ctx.Err() != nil {
+		return nil
+	}
 	if len(tokens) == 0 && !useUsage {
-		n := min(len(i.records), resultLimit)
+		n := min(len(i.records), i.policy.ResultLimit)
 		out := make([]Record, n)
 		for j := range n {
 			out[j] = i.records[j].record
@@ -196,77 +210,46 @@ func (i *Index) search(ctx context.Context, query string, counts map[string]int6
 		}
 		return out
 	}
-	matches := make(worstHeap, 0, resultLimit)
+	matches := make(worstHeap, 0, min(len(i.records), i.policy.ResultLimit))
 	for n := range i.records {
-		if n&255 == 0 {
-			select {
-			case <-ctx.Done():
-				return nil
-			default:
-			}
+		if ctx.Err() != nil {
+			return nil
 		}
 		item := &i.records[n]
-		score, ok := 0, len(tokens) == 0
+		textQuality, ok := quality{}, len(tokens) == 0
 		if len(tokens) != 0 {
-			score, ok = scoreRecord(item, tokens)
+			textQuality, ok = i.scoreRecord(ctx, item, query, tokens)
 		}
 		if !ok {
 			continue
 		}
-		match := candidate{item: item, score: score, count: counts[item.record.ID], usage: useUsage}
-		if len(matches) < resultLimit {
-			heap.Push(&matches, match)
+		match := candidate{item: item, quality: textQuality, count: counts[item.record.ID], usage: useUsage}
+		if len(matches) < i.policy.ResultLimit {
+			matches = append(matches, match)
+			heap.Fix(&matches, len(matches)-1)
 		} else if better(match, matches[0]) {
 			matches[0] = match
 			heap.Fix(&matches, 0)
 		}
 	}
-	for n := 1; n < len(matches); n++ {
-		match, position := matches[n], n
-		for position > 0 {
-			if !better(match, matches[position-1]) {
-				break
-			}
-			matches[position] = matches[position-1]
-			position--
-		}
-		matches[position] = match
+	if ctx.Err() != nil {
+		return nil
 	}
+	slices.SortFunc(matches, func(a, b candidate) int {
+		if better(a, b) {
+			return -1
+		}
+		if better(b, a) {
+			return 1
+		}
+		return 0
+	})
 	out := make([]Record, len(matches))
 	for n, match := range matches {
 		out[n] = match.item.record
 		out[n].Fields = slices.Clone(out[n].Fields)
 	}
 	return out
-}
-
-func scoreRecord(record *indexedRecord, tokens []string) (int, bool) {
-	fields := record.fields
-	score := 0
-	for _, token := range tokens {
-		best := 0
-		for _, field := range fields {
-			switch {
-			case field == token && field != "":
-				if best < 100 {
-					best = 100
-				}
-			case strings.HasPrefix(field, token) && field != "":
-				if best < 50 {
-					best = 50
-				}
-			case strings.Contains(field, token):
-				if best < 10 {
-					best = 10
-				}
-			}
-		}
-		if best == 0 {
-			return 0, false
-		}
-		score += best
-	}
-	return score, true
 }
 
 // Update is the result delivered to the GUI owner thread.

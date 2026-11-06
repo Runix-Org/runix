@@ -24,22 +24,23 @@ func (s *SearchSuite) TestIndexSearchRankingAndLimit() {
 		{ID: "two", Title: "alphabet beta"},
 		{ID: "three", Subtitle: "alpha", Category: "beta"},
 		{ID: "id-match", Title: "unrelated"},
-	})
+	}, DefaultPolicy())
 	got := index.Search(context.Background(), "  ALPHA\tbeta ")
 	s.Require().Len(got, 3)
 	s.Equal([]string{"one", "three", "two"}, recordIDs(got))
-	s.Equal("ID-MATCH", NewIndex([]Record{{ID: "ID-MATCH"}}).Search(context.Background(), "match")[0].ID)
+	idIndex := NewIndex([]Record{{ID: "ID-MATCH"}}, DefaultPolicy())
+	s.Equal("ID-MATCH", idIndex.Search(context.Background(), "match")[0].ID)
 
 	records := make([]Record, 500)
 	for n := range records {
 		records[n] = Record{ID: fmt.Sprintf("%03d", n), Title: "match"}
 	}
-	got = NewIndex(records).Search(context.Background(), "match")
-	s.Require().Len(got, resultLimit)
+	got = NewIndex(records, DefaultPolicy()).Search(context.Background(), "match")
+	s.Require().Len(got, DefaultPolicy().ResultLimit)
 	s.Equal("000", got[0].ID)
 	s.Equal("199", got[199].ID)
-	got = NewIndex(records).Search(context.Background(), " ")
-	s.Require().Len(got, resultLimit)
+	got = NewIndex(records, DefaultPolicy()).Search(context.Background(), " ")
+	s.Require().Len(got, DefaultPolicy().ResultLimit)
 	s.Equal("000", got[0].ID)
 }
 
@@ -48,16 +49,16 @@ func (s *SearchSuite) TestTypedMetadataMatchesWithoutChangingDisplayFields() {
 		ID: "encoded-ui-identity", Title: "Localized", Subtitle: "Comment",
 		Fields: []Field{{Kind: FieldName, Value: "Base Name"}, {Kind: FieldKeyword, Value: "Keywords"}},
 	}
-	got := NewIndex([]Record{record}).Search(context.Background(), "base keywords")
+	got := NewIndex([]Record{record}, DefaultPolicy()).Search(context.Background(), "base keywords")
 	s.Require().Len(got, 1)
 	s.Equal("Localized", got[0].Title)
 	s.Equal("Comment", got[0].Subtitle)
-	s.Empty(NewIndex([]Record{record}).Search(context.Background(), "encoded-ui-identity"))
+	s.Empty(NewIndex([]Record{record}, DefaultPolicy()).Search(context.Background(), "encoded-ui-identity"))
 }
 
 func (s *SearchSuite) TestTypedMetadataRemainsImmutableAcrossSearches() {
 	fields := []Field{{Kind: FieldKeyword, Value: "original"}}
-	index := NewIndex([]Record{{ID: "item", Fields: fields}})
+	index := NewIndex([]Record{{ID: "item", Fields: fields}}, DefaultPolicy())
 	fields[0].Value = "changed input"
 	first := index.Search(context.Background(), "original")
 	s.Require().Len(first, 1)
@@ -83,7 +84,7 @@ func (s *SearchSuite) TestDeduplicationPreservesKindsAndValueBoundaries() {
 		{Kind: FieldKeyword, Value: "one"},
 		{Kind: FieldKeyword, Value: "two"},
 	}, fields)
-	index := NewIndex([]Record{{ID: "item", Fields: fields}})
+	index := NewIndex([]Record{{ID: "item", Fields: fields}}, DefaultPolicy())
 	s.Len(index.Search(context.Background(), "base two"), 1)
 	s.Empty(index.Search(context.Background(), "onetwo"))
 }
@@ -228,10 +229,10 @@ func (s *SearchSuite) TestUsageRankingBeforeLimitAndTextBeforeCount() {
 			DisplayID: fmt.Sprintf("%03d", n),
 		}
 	}
-	index := NewIndex(records)
+	index := NewIndex(records, DefaultPolicy())
 	for _, query := range []string{"", "alpha"} {
 		got := index.SearchWithUsage(context.Background(), query, map[string]int64{"499": 5, "498": 2})
-		s.Require().Len(got, resultLimit)
+		s.Require().Len(got, DefaultPolicy().ResultLimit)
 		s.Equal([]string{"499", "498", "000"}, recordIDs(got[:3]))
 		s.Equal("197", got[199].ID)
 	}
@@ -239,7 +240,7 @@ func (s *SearchSuite) TestUsageRankingBeforeLimitAndTextBeforeCount() {
 		{ID: "popular", Title: "Alphabet"},
 		{ID: "exact", Title: "Alpha"},
 		{ID: "absent", Title: "Other"},
-	})
+	}, DefaultPolicy())
 	s.Equal([]string{"exact", "popular"}, recordIDs(index.SearchWithUsage(context.Background(), "alpha",
 		map[string]int64{"popular": 100, "absent": 1000})))
 }
@@ -250,7 +251,7 @@ func (s *SearchSuite) TestUsageTiesUseNameAndFullIdentity() {
 		{ID: "encoded-b", Title: "Alpha", ProviderID: "b", DisplayID: "a"},
 		{ID: "encoded-c", Title: "alpha", ProviderID: "a", DisplayID: "b"},
 		{ID: "encoded-z", Title: "ALPHA", ProviderID: "a", DisplayID: "a"},
-	})
+	}, DefaultPolicy())
 	s.Equal([]string{"encoded-z", "encoded-c", "encoded-b", "encoded-a"},
 		recordIDs(index.SearchWithUsage(context.Background(), "", nil)))
 }

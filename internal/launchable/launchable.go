@@ -382,7 +382,7 @@ func buildCatalog(snaps map[string]*Snapshot, prev *Catalog) *Catalog {
 	if prev != nil && sameSearchable(prev.records, c.records) {
 		c.index = prev.index
 	} else {
-		c.index = search.NewIndex(c.records)
+		c.index = search.NewIndex(c.records, search.DefaultPolicy())
 	}
 	return c
 }

@@ -80,7 +80,7 @@ func (s *ProviderSuite) TestProjectionAndTypedSearchMetadata() {
 	s.False(contains(search.FieldCategory, "utility"))
 	index := search.NewIndex([]search.Record{{
 		ID: item.ID, Title: item.Title, Subtitle: item.Subtitle, Fields: item.Fields,
-	}})
+	}}, search.DefaultPolicy())
 	s.Len(index.Search(context.Background(), "base name hiddenword"), 1)
 	for _, query := range []string{
 		"nom editor", "rédacteur", "motsecret", "hiddencomment", "commentaire", "utility", "text;editor", "app.desktop",

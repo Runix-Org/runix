@@ -7,8 +7,10 @@ require (
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/godbus/dbus/v5 v5.2.4
 	github.com/mappu/miqt v0.15.0
+	github.com/sahilm/fuzzy v0.1.3
 	github.com/stretchr/testify v1.11.1
 	github.com/yuin/goldmark v1.8.2
+	golang.org/x/text v0.44.0
 	modernc.org/sqlite v1.63.0
 )
 

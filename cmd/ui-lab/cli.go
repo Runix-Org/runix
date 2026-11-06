@@ -50,5 +50,6 @@ func (command *command) Run() error {
 		DetailContent:    detailFixture,
 		DetailLink:       func(url string) { fmt.Printf("Allowed detail link: %s\n", url) },
 	}
-	return qmlbridge.Run(args, document, search.NewIndex(searchFixture(iconRefs)).Search, options)
+	index := search.NewIndex(searchFixture(iconRefs), search.DefaultPolicy())
+	return qmlbridge.Run(args, document, index.Search, options)
 }
