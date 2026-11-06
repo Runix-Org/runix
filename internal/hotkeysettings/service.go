@@ -87,35 +87,35 @@ func (s *Service) read(ctx context.Context) (Snapshot, error) {
 		return result, err
 	}
 	if state.Pending != "" {
-		err = errors.New("a hotkey transaction needs recovery; run runix hotkeys restore")
+		err = errors.New("A shortcut change needs recovery. Run runix hotkeys restore.")
 	} else if saved == nil {
 		if len(state.Bindings) == 0 {
 			result.Status = "unassigned"
 			return result, nil
 		}
-		err = errors.New("runtime hotkeys differ from the saved assignments; run runix hotkeys restore")
+		err = errors.New("The active shortcuts do not match the saved shortcuts. Run runix hotkeys restore.")
 	} else {
 		inspection, inspectErr := s.client.Inspect(ctx, saved.Combination)
 		if inspectErr != nil {
 			err = inspectErr
 		} else if len(inspection.Foreign) != 0 {
 			result.Status = "conflict"
-			err = errors.New("the saved toggle shortcut may overlap another binding")
+			err = errors.New("The saved shortcut may overlap another shortcut.")
 		} else if inspection.State == "unknown" {
-			err = errors.New("cannot verify the saved toggle shortcut")
+			err = errors.New("Could not check the saved shortcut.")
 		} else if len(state.Bindings) == 1 && matches(state.Bindings[0], saved) {
 			confirmed, confirmErr := s.client.Status(ctx)
 			if confirmErr != nil {
 				err = confirmErr
 			} else if confirmed.Epoch != state.Epoch || confirmed.Revision != state.Revision {
-				err = errors.New("the Hyprland lifetime or hotkeys changed while reading status")
+				err = errors.New("Hyprland changed while checking shortcuts. Try again.")
 			} else {
 				result.Status = "active"
 				return result, nil
 			}
 		} else {
 			result.Status = "inactive"
-			err = errors.New("the saved toggle shortcut is not active; run runix hotkeys restore")
+			err = errors.New("The saved shortcut is not active. Run runix hotkeys restore.")
 		}
 	}
 	result.Error = err.Error()
@@ -124,10 +124,10 @@ func (s *Service) read(ctx context.Context) (Snapshot, error) {
 
 func available(state hyprlandhotkey.State) error {
 	if state.IntegrationID != hyprland.Identity {
-		return errors.New("update and reconnect the runix Hyprland module before changing shortcuts")
+		return errors.New("Update and reconnect the runix Hyprland module before changing shortcuts.")
 	}
 	if !state.Ready || !state.ToggleAvailable {
-		return errors.New("the runix Hyprland module is not ready for toggle shortcuts")
+		return errors.New("The runix Hyprland module is not ready for shortcut changes.")
 	}
 	return nil
 }
@@ -171,13 +171,13 @@ func (s *Service) change(ctx context.Context, token Token, desired *Assignment) 
 		return s.failed(bounded, err)
 	}
 	if token != (Token{Epoch: state.Epoch, Revision: state.Revision, Saved: digest}) {
-		return s.failed(bounded, errors.New("hotkeys changed; read the current status before saving"))
+		return s.failed(bounded, errors.New("Shortcuts changed. Check the current status before saving."))
 	}
 	if state.Pending != "" || len(state.Bindings) > 1 {
-		return s.failed(bounded, errors.New("runtime hotkeys need recovery; run runix hotkeys restore"))
+		return s.failed(bounded, errors.New("Active shortcuts need recovery. Run runix hotkeys restore."))
 	}
 	if len(state.Bindings) == 1 && !matches(state.Bindings[0], previous) {
-		return s.failed(bounded, errors.New("runtime hotkeys differ from saved assignments; run runix hotkeys restore"))
+		return s.failed(bounded, errors.New("Active shortcuts do not match the saved shortcuts. Run runix hotkeys restore."))
 	}
 	var changed hyprlandhotkey.State
 	if desired != nil {
@@ -198,7 +198,7 @@ func (s *Service) change(ctx context.Context, token Token, desired *Assignment) 
 	// final verification rejects success and the new lifetime restores saved intent.
 	observed, err := s.client.Status(bounded)
 	if err == nil && (observed.Epoch != state.Epoch || observed.Revision != changed.Revision) {
-		err = errors.New("the Hyprland lifetime or hotkeys changed before the assignment was saved")
+		err = errors.New("Hyprland changed before the shortcut was saved.")
 	}
 	if err != nil {
 		return s.recoverFailure(err, state.Epoch)
@@ -208,7 +208,7 @@ func (s *Service) change(ctx context.Context, token Token, desired *Assignment) 
 		return s.recoverFailure(fmt.Errorf("save hotkey assignments: %w", saveErr), state.Epoch)
 	}
 	if !committed {
-		return s.recoverFailure(errors.New("hotkey assignments were not committed"), state.Epoch)
+		return s.recoverFailure(errors.New("Shortcuts were not saved."), state.Epoch)
 	}
 	if changed.Pending != "" {
 		_, err = s.client.Commit(bounded, changed)
@@ -218,7 +218,7 @@ func (s *Service) change(ctx context.Context, token Token, desired *Assignment) 
 	}
 	result, err := s.read(bounded)
 	if err == nil && result.Token.Epoch != state.Epoch {
-		err = errors.New("the Hyprland lifetime changed while saving; verify the restored shortcut")
+		err = errors.New("Hyprland changed while saving. Check the restored shortcut.")
 	}
 	if err != nil {
 		return result, err
@@ -240,7 +240,7 @@ func (s *Service) recoverFailure(cause error, epoch string) (Snapshot, error) {
 	result, statusErr := s.read(ctx)
 	if recoveryErr != nil || statusErr != nil {
 		cause = errors.Join(cause,
-			errors.New("hotkey recovery is incomplete; read status before retrying"), recoveryErr, statusErr)
+			errors.New("Shortcut recovery is incomplete. Check the status before trying again."), recoveryErr, statusErr)
 		result.Status = "degraded"
 		result.Error = cause.Error()
 	}
@@ -276,7 +276,7 @@ func (s *Service) reconcile(ctx context.Context, epoch string) error {
 		return err
 	}
 	if epoch != "" && state.Epoch != epoch {
-		return errors.New("restore request belongs to an old Hyprland lifetime")
+		return errors.New("This restore request belongs to an older Hyprland session.")
 	}
 	if state.Pending != "" {
 		commit := state.PendingRemoval && saved == nil
@@ -301,10 +301,10 @@ func (s *Service) reconcile(ctx context.Context, epoch string) error {
 			return inspectErr
 		}
 		if inspection.State == "unknown" {
-			return errors.New("cannot verify the saved toggle shortcut")
+			return errors.New("Could not check the saved shortcut.")
 		}
 		if len(inspection.Foreign) != 0 {
-			conflict = errors.New("the saved toggle shortcut may overlap another binding")
+			conflict = errors.New("The saved shortcut may overlap another shortcut.")
 		}
 	}
 	kept := false

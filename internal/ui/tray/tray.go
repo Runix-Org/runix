@@ -36,23 +36,23 @@ func Install(request func(string) bool) func() {
 	} {
 		menu.AddActionWithText(action.label).OnTriggered(func() {
 			if !request(action.command) {
-				fmt.Fprintln(os.Stderr, "Launcher activation is busy or stopping.")
+				fmt.Fprintln(os.Stderr, "The launcher is busy or stopping.")
 			}
 		})
 	}
 	menu.AddSeparator()
 	menu.AddActionWithText("Quit").OnTriggered(qt.QCoreApplication_Quit)
 	entry.SetContextMenu(menu)
-	entry.SetToolTip("runix UI laboratory")
+	entry.SetToolTip("runix UI lab")
 	entry.OnActivated(func(reason qt.QSystemTrayIcon__ActivationReason) {
 		if reason == qt.QSystemTrayIcon__Trigger {
 			if !request("toggle") {
-				fmt.Fprintln(os.Stderr, "Launcher activation is busy or stopping.")
+				fmt.Fprintln(os.Stderr, "The launcher is busy or stopping.")
 			}
 		}
 	})
 	if !qt.QSystemTrayIcon_IsSystemTrayAvailable() {
-		fmt.Fprintln(os.Stderr, "System tray is unavailable. Use the activation socket to show the window.")
+		fmt.Fprintln(os.Stderr, "The system tray is not available. Use the activation socket to show the window.")
 	}
 	entry.Show()
 	return func() {

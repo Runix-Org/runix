@@ -72,9 +72,9 @@ func installLaunch(
 		}
 		switch outcome.State.Phase {
 		case "submitting":
-			a.value.Status = fmt.Sprintf("Launching %s [%s]...", outcome.State.Name, displayID)
+			a.value.Status = fmt.Sprintf("Launching %s (%s)...", outcome.State.Name, displayID)
 		case "failed":
-			a.value.Status = fmt.Sprintf("Cannot launch %s [%s]: %s",
+			a.value.Status = fmt.Sprintf("Could not launch %s (%s): %s",
 				outcome.State.Name, displayID, outcome.State.Error)
 		}
 		results.SetActivationEnabled(!outcome.State.Busy)

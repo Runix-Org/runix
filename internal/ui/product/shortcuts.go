@@ -95,12 +95,12 @@ func installShortcuts(ctx context.Context, app *qt.QApplication, engine *qml.QQm
 				return false
 			}
 			if len(a.held) != 0 {
-				a.recorderError = "Release the previous keys before recording again."
+				a.recorderError = "Release the held keys before recording again."
 				a.publish()
 				return true
 			}
 			if C.runix_capture_start(a.capture) == 0 {
-				a.recorderError = "Cannot capture shortcuts. Focus this Wayland window and try again."
+				a.recorderError = "Could not record the shortcut. Focus this Wayland window and try again."
 				a.publish()
 				return true
 			}
@@ -271,7 +271,7 @@ func recordedCombination(scan uint, key qt.Key, modifiers qt.KeyboardModifier) (
 	switch key {
 	case qt.Key_Shift, qt.Key_Control, qt.Key_Alt, qt.Key_Meta, qt.Key_Super_L, qt.Key_Super_R,
 		qt.Key_Hyper_L, qt.Key_Hyper_R, qt.Key_AltGr, qt.Key_CapsLock, qt.Key_NumLock, qt.Key_ScrollLock:
-		return hyprlandhotkey.Combination{}, "Press a non-modifier key. Escape cancels."
+		return hyprlandhotkey.Combination{}, "Press a regular key. Press Escape to cancel."
 	}
 	if modifiers & ^(qt.ShiftModifier|qt.ControlModifier|qt.AltModifier|qt.MetaModifier|qt.KeypadModifier) != 0 {
 		return hyprlandhotkey.Combination{}, "This modifier is not supported. Use Ctrl, Alt, Shift, or Super."

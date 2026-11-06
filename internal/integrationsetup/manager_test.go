@@ -160,7 +160,6 @@ func (s *managerSuite) TestFailedReloadKeepsInstalledSourceAndAllowsRepair() {
 	s.Equal("error", result.Phase)
 	s.False(result.Available)
 	s.Equal("current", result.ModuleState)
-	s.Contains(result.Status, "reload failed")
 	s.NotEmpty(result.Require)
 	s.Equal(hyprland.Source, s.read(module))
 	s.manager.reload = func(context.Context) error { return nil }

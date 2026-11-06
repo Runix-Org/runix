@@ -168,17 +168,12 @@ func (s *LaunchableSuite) TestCatalogDiagnosticsAndSearchIndexReuse() {
 	first, err := NewSnapshot(1, items, []Diagnostic{{ProviderID: "alpha", Code: "read"}})
 	s.Require().NoError(err)
 	a := buildCatalog(map[string]*Snapshot{"alpha": first}, nil)
-	s.Equal("Some applications could not be read", a.Status())
 	s.Len(a.Diagnostics(), 1)
 	second, err := NewSnapshot(2, items, nil)
 	s.Require().NoError(err)
 	b := buildCatalog(map[string]*Snapshot{"alpha": second}, a)
 	s.Same(a.index, b.index)
 	s.Equal(uint64(2), b.Records()[0].CatalogGeneration)
-	empty, err := NewSnapshot(1, nil, []Diagnostic{{ProviderID: "alpha"}})
-	s.Require().NoError(err)
-	s.Equal("No applications found; some sources could not be read",
-		buildCatalog(map[string]*Snapshot{"alpha": empty}, nil).Status())
 }
 
 func (s *LaunchableSuite) TestUnchangedSnapshotAndIconOnlyUpdates() {

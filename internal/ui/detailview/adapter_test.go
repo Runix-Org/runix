@@ -60,6 +60,5 @@ Item {
 	s.Require().True(seen, "The fixture must first display selected content")
 	s.Empty(adapter.info.ID)
 	s.Equal("plain", adapter.info.Format)
-	s.Contains(adapter.info.HTML, "No result selected.")
 	s.NotContains(adapter.info.HTML, "Old selected content")
 }

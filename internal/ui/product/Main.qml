@@ -203,7 +203,7 @@ ApplicationWindow {
                                     }
                                     Label {
                                         visible: setup.info.module_state === "current"
-                                        text: "Up to date"
+                                        text: "Current version installed"
                                         color: "#93d5aa"
                                     }
                                     Button {
@@ -254,7 +254,7 @@ ApplicationWindow {
                                 }
                                 Label {
                                     Layout.fillWidth: true
-                                    text: "Add this line to hyprland.lua, then reload and check the connection."
+                                    text: "Add this line to hyprland.lua. Then click Reload and check."
                                     color: "#aebcca"
                                     wrapMode: Text.Wrap
                                 }
@@ -283,14 +283,14 @@ ApplicationWindow {
                             Layout.fillWidth: true
                             visible: setup.info.phase !== "unavailable"
                             enabled: !setup.info.busy
-                            text: "Install and update automatically at startup"
+                            text: "Install and update the module at startup"
                             checked: !!setup.info.automatic
                             onToggled: setup.request("preference")
                         }
                         Label {
                             Layout.fillWidth: true
                             visible: setup.info.phase !== "unavailable"
-                            text: "Updates and connection checks reload Hyprland. Runix never edits your Hyprland config."
+                            text: "Updates and connection checks reload Hyprland. Runix never changes your Hyprland configuration."
                             font.pixelSize: 12
                             color: "#aebcca"
                             wrapMode: Text.Wrap
@@ -346,6 +346,25 @@ ApplicationWindow {
                     parts.push("Keycode " + value.keycode)
                     return parts.join(" + ")
                 }
+                function savedStatus(value) {
+                    switch (value) {
+                    case "active": return "Ready to use"
+                    case "inactive": return "Saved, but not active"
+                    case "unassigned": return "No shortcut saved"
+                    case "conflict": return "Also used by another shortcut"
+                    case "degraded": return "Could not check the shortcut"
+                    default: return "Checking..."
+                    }
+                }
+                function candidateStatus(value) {
+                    switch (value) {
+                    case "owned": return "Assigned to runix"
+                    case "free": return "Available"
+                    case "foreign":
+                    case "conflict": return "Already in use"
+                    default: return "Could not check this key combination"
+                    }
+                }
                 onInfoChanged: {
                     const wasOnboarding = window.onboarding
                     window.shortcutInfo = info
@@ -366,13 +385,13 @@ ApplicationWindow {
                     }
                     Label {
                         Layout.fillWidth: true
-                        text: "Toggle runix"
+                        text: "Show or hide runix"
                         font.bold: true
                     }
                     Label {
                         Layout.fillWidth: true
                         text: "Saved: " + shortcuts.combination(shortcuts.info.saved)
-                            + " · " + (shortcuts.info.status || "Checking...")
+                            + " · " + shortcuts.savedStatus(shortcuts.info.status)
                         textFormat: Text.PlainText
                         wrapMode: Text.Wrap
                     }
@@ -387,17 +406,16 @@ ApplicationWindow {
                     Label {
                         Layout.fillWidth: true
                         visible: !shortcuts.info.available
-                        text: "Shortcut assignment needs a ready Hyprland module. Open Integration to repair it, "
-                            + "or continue without a shortcut."
+                        text: "To set a shortcut, connect the Hyprland module in Integration. "
+                            + "You can also continue without a shortcut."
                         wrapMode: Text.Wrap
                     }
                     Label {
                         Layout.fillWidth: true
-                        text: shortcuts.info.recording ? "Press a shortcut. Escape cancels."
-                            : shortcuts.info.candidate ? "Candidate: " + shortcuts.combination(shortcuts.info.candidate)
-                                + " · " + (shortcuts.info.candidate_status === "owned"
-                                    ? "Owned by runix: toggle" : shortcuts.info.candidate_status)
-                            : "Record a key with optional Ctrl, Alt, Shift, or Super."
+                        text: shortcuts.info.recording ? "Press a key combination. Press Escape to cancel."
+                            : shortcuts.info.candidate ? "New shortcut: " + shortcuts.combination(shortcuts.info.candidate)
+                                + " · " + shortcuts.candidateStatus(shortcuts.info.candidate_status)
+                            : "Press Record shortcut, then press a key. You can hold Ctrl, Alt, Shift, or Super."
                         textFormat: Text.PlainText
                         wrapMode: Text.Wrap
                     }
@@ -411,7 +429,7 @@ ApplicationWindow {
                     }
                     Label {
                         Layout.fillWidth: true
-                        text: "Keycode identifies a physical key and does not change with the keyboard layout."
+                        text: "A keycode is the number of a physical key. It stays the same when you change keyboard layouts."
                         wrapMode: Text.Wrap
                     }
                     Flow {
@@ -562,7 +580,7 @@ ApplicationWindow {
                         }
                         RowLayout {
                             Button {
-                                text: "Launch"
+                                text: "Open"
                                 enabled: search.info.activation_enabled && !search.info.loading && search.info.selected_index >= 0
                                 onClicked: { if (results.item) results.item.activate() }
                             }

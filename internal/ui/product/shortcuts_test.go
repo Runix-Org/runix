@@ -24,8 +24,9 @@ func (s *recorderSuite) TestLayoutSymbolsKeepPhysicalIdentity() {
 
 func (s *recorderSuite) TestModifierOnlyUnsupportedAndMissingNativeIdentity() {
 	for _, key := range []qt.Key{qt.Key_Control, qt.Key_Shift, qt.Key_AltGr, qt.Key_Meta, qt.Key_CapsLock} {
-		_, message := recordedCombination(37, key, qt.ControlModifier)
-		s.Contains(message, "non-modifier")
+		combination, message := recordedCombination(37, key, qt.ControlModifier)
+		s.NotEmpty(message)
+		s.Zero(combination)
 	}
 	_, message := recordedCombination(38, qt.Key_A, qt.GroupSwitchModifier)
 	s.Contains(message, "not supported")

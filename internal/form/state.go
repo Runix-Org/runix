@@ -114,19 +114,19 @@ func (s *State) Snapshot() Snapshot {
 func validate(values Values) map[string]string {
 	errors := make(map[string]string)
 	if strings.TrimSpace(values.Name) == "" {
-		errors["name"] = "Name is required"
+		errors["name"] = "Enter a name."
 	}
 	if strings.TrimSpace(values.Notes) == "" {
-		errors["notes"] = "Notes are required"
+		errors["notes"] = "Enter notes."
 	}
 	if utf8.RuneCountInString(values.Password) < 8 {
-		errors["password"] = "Password must contain at least 8 characters"
+		errors["password"] = "Use at least 8 characters for the password."
 	}
 	if values.Choice != "Personal" && values.Choice != "Work" {
-		errors["choice"] = "Choose Personal or Work"
+		errors["choice"] = "Choose Personal or Work."
 	}
 	if !values.Accepted {
-		errors["accepted"] = "You must accept the terms"
+		errors["accepted"] = "Accept the terms."
 	}
 	return errors
 }

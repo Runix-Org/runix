@@ -38,7 +38,7 @@ func installIntegration(ctx context.Context, engine *qml.QQmlApplicationEngine, 
 		done:     make(chan struct{}),
 		busy:     true,
 	}
-	initial := integrationsetup.Snapshot{Phase: "checking", Status: "Checking Hyprland integration..."}
+	initial := integrationsetup.Snapshot{Phase: "checking", Status: "Checking the Hyprland integration..."}
 	if !enabled {
 		initial.Phase = "unavailable"
 		initial.Status = "Lua integration is disabled or this desktop is not supported."

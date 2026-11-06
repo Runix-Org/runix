@@ -58,7 +58,7 @@ func (m *Manager) Run(ctx context.Context, action string, automatic bool) Snapsh
 	}
 	if err := ctx.Err(); err != nil {
 		s.Phase = "error"
-		s.Status = "Integration setup canceled: " + err.Error()
+		s.Status = "Integration setup was canceled: " + err.Error()
 		return s
 	}
 	state, statusErr := m.status(ctx)
@@ -76,7 +76,7 @@ func (m *Manager) Run(ctx context.Context, action string, automatic bool) Snapsh
 	}
 	if contextErr := ctx.Err(); contextErr != nil {
 		s.Phase = "error"
-		s.Status = "Integration setup canceled: " + contextErr.Error()
+		s.Status = "Integration setup was canceled: " + contextErr.Error()
 		return s
 	}
 	if action == "preference" || action == "install" {
@@ -101,7 +101,7 @@ func (m *Manager) Run(ctx context.Context, action string, automatic bool) Snapsh
 		if err != nil {
 			s.Phase = "error"
 			s.Path = path
-			s.Status = "Cannot inspect installed module: " + err.Error()
+			s.Status = "Could not check the installed module: " + err.Error()
 			return s
 		}
 	}
@@ -123,7 +123,7 @@ func (m *Manager) Run(ctx context.Context, action string, automatic bool) Snapsh
 		if contextErr := ctx.Err(); contextErr != nil {
 			s.Phase = "error"
 			s.Path = path
-			s.Status = "Integration setup canceled: " + contextErr.Error()
+			s.Status = "Integration setup was canceled: " + contextErr.Error()
 			return s
 		}
 		if !exists {
@@ -136,7 +136,7 @@ func (m *Manager) Run(ctx context.Context, action string, automatic bool) Snapsh
 		if contextErr := ctx.Err(); contextErr != nil {
 			s.Phase = "error"
 			s.Path = path
-			s.Status = "Integration setup canceled: " + contextErr.Error()
+			s.Status = "Integration setup was canceled: " + contextErr.Error()
 			return s
 		}
 		if err = m.install(path); err != nil {
@@ -151,8 +151,8 @@ func (m *Manager) Run(ctx context.Context, action string, automatic bool) Snapsh
 			s.Path = path
 			s.Require = requireInstruction(path)
 			s.Phase = "connect"
-			s.Status = "Module installed. Add the instruction to Hyprland configuration, " +
-				"then confirm to reload and verify it."
+			s.Status = "Module installed. Add this line to your Hyprland configuration, " +
+				"then confirm to reload and check it."
 			return s
 		}
 	}
@@ -163,12 +163,12 @@ func (m *Manager) Run(ctx context.Context, action string, automatic bool) Snapsh
 		if contextErr := ctx.Err(); contextErr != nil {
 			s.Phase = "error"
 			s.Path = path
-			s.Status = "Integration setup canceled: " + contextErr.Error()
+			s.Status = "Integration setup was canceled: " + contextErr.Error()
 			return s
 		}
 		if err = m.reload(ctx); err != nil {
 			s.Phase = "error"
-			s.Status = "Module is installed, but Hyprland reload failed: " + err.Error()
+			s.Status = "Module installed, but Hyprland could not reload: " + err.Error()
 			return s
 		}
 		for i := 0; i < 4; i++ {
@@ -189,7 +189,7 @@ func (m *Manager) Run(ctx context.Context, action string, automatic bool) Snapsh
 		}
 		s.Phase = "connect"
 		s.Status = "Hyprland reloaded, but the running module is not ready with the installed source. " +
-			"Check the require instruction and confirm again."
+			"Check the require line and confirm again."
 		return s
 	}
 	if statusErr == nil && state.Ready && state.IntegrationID == hyprland.Identity && exists && current {
@@ -200,17 +200,17 @@ func (m *Manager) Run(ctx context.Context, action string, automatic bool) Snapsh
 	}
 	if exists && !current {
 		s.Phase = "update"
-		s.Status = "Installed module is stale; choose Update to replace it and reload Hyprland."
+		s.Status = "The installed module is out of date. Choose Update to replace it and reload Hyprland."
 	} else if exists {
 		s.Phase = "connect"
-		s.Status = "Installed module is not connected with the current source; " +
-			"add the require instruction and confirm to reload."
+		s.Status = "The installed module is not connected to the current source. " +
+			"Add the require line and confirm to reload."
 	} else {
 		s.Phase = "install"
-		s.Status = "Integration module is not installed."
+		s.Status = "The integration module is not installed."
 	}
 	if statusErr != nil {
-		s.Status += " Status probe: " + statusErr.Error()
+		s.Status += " Status check: " + statusErr.Error()
 	}
 	if action != "startup" && action != "refresh" && action != "preference" && action != "install" {
 		s.Phase = "error"

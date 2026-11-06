@@ -14,11 +14,11 @@ import (
 var document []byte
 
 type command struct {
-	HyprlandWindow   bool     `help:"Use Hyprland IPC for window sizing, placement, and focus."`
+	HyprlandWindow   bool     `help:"Use Hyprland IPC to control window size, position and focus."`
 	DebugSocket      string   `help:"Enable the development debug socket at this private path." placeholder:"PATH"`
-	ActivationSocket string   `help:"Use this private activation path; default: a new temporary directory."`
-	StartHidden      bool     `help:"Start hidden and wait for activation."`
-	QtArgs           []string `arg:"" optional:"" passthrough:"partial" help:"Arguments passed to Qt after --."`
+	ActivationSocket string   `help:"Use this private activation path. By default, use a new temporary directory."`
+	StartHidden      bool     `help:"Start hidden and wait for an activation request."`
+	QtArgs           []string `arg:"" optional:"" passthrough:"partial" help:"Arguments to pass to Qt after --."`
 }
 
 func (command *command) Run() error {

@@ -90,7 +90,7 @@ func Install(
 			if a.info.ID == command.ID {
 				return true
 			}
-			format, text := "plain", "No result selected."
+			format, text := "plain", "No result is selected."
 			if command.ID != "" && resolve != nil {
 				format, text = resolve(command.ID)
 			}
@@ -101,10 +101,10 @@ func Install(
 			a.info = snapshot{ID: command.ID, Format: format, HTML: html}
 		case "link":
 			if err := ValidateLink(command.URL); err != nil {
-				a.info.LinkStatus = "Rejected link: " + err.Error()
+				a.info.LinkStatus = "Link rejected: " + err.Error()
 			} else {
 				a.info.LastLink = command.URL
-				a.info.LinkStatus = "Allowed link sent to the laboratory handler. No URL was opened."
+				a.info.LinkStatus = "Allowed link sent to the lab handler. No URL was opened."
 				if link != nil {
 					link(command.URL)
 				}

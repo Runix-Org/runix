@@ -180,14 +180,14 @@ func (c *Catalog) Status() string {
 	}
 	if len(c.records) == 0 {
 		if len(c.diagnostics) > 0 {
-			return "No applications found; some sources could not be read"
+			return "No applications found. Some sources could not be read."
 		}
 		return "No applications found"
 	}
 	if len(c.diagnostics) > 0 {
-		return "Some applications could not be read"
+		return "Some applications could not be read."
 	}
-	return "Applications loaded"
+	return "Applications loaded."
 }
 
 func (c *Catalog) Diagnostics() []Diagnostic {

@@ -40,12 +40,12 @@ QtObject {
     }
 
     function startMove() {
-        moveResult = window.startSystemMove() ? "Accepted by Qt; observe compositor" : "Rejected by Qt"
+        moveResult = window.startSystemMove() ? "Qt accepted the request. Check the compositor." : "Qt rejected the request."
     }
 
     function startResize() {
         resizeResult = window.startSystemResize(Qt.RightEdge | Qt.BottomEdge)
-            ? "Accepted by Qt; observe compositor" : "Rejected by Qt"
+            ? "Qt accepted the request. Check the compositor." : "Qt rejected the request."
     }
 
     onConstrainedSizeChanged: applySize()

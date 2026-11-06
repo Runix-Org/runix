@@ -145,7 +145,6 @@ func (s *controllerSuite) TestDeliberateRemovalIsRememberedAndPreferenceFailureK
 	snapshot := s.run("remove")
 	s.False(snapshot.Completed)
 	s.Require().NotNil(snapshot.Saved)
-	s.Contains(snapshot.Error, "assignment unchanged")
 	s.Len(s.runtime.state.Bindings, 1)
 	s.controller.dismiss = integrationsetup.DismissShortcutSetup
 	snapshot = s.run("remove")

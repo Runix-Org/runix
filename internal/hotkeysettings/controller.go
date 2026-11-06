@@ -64,7 +64,7 @@ func (c *Controller) Run(ctx context.Context, command UICommand, integrationAvai
 		c.refresh(ctx)
 		dismissed, err := c.preference()
 		if err != nil {
-			c.snapshot.Error = "Cannot read shortcut setup preference: " + err.Error()
+			c.snapshot.Error = "Could not read the shortcut setup preference: " + err.Error()
 		}
 		c.snapshot.Onboarding = c.snapshot.Saved == nil && !dismissed
 	case "refresh":
@@ -82,7 +82,7 @@ func (c *Controller) Run(ctx context.Context, command UICommand, integrationAvai
 		// A preference write failure must not trap the user in setup.
 		c.snapshot.Error = ""
 		if err := c.dismiss(); err != nil {
-			c.snapshot.Error = "Setup skipped, but the choice could not be saved: " + err.Error()
+			c.snapshot.Error = "Setup skipped, but the choice was not saved: " + err.Error()
 		}
 		c.snapshot.Completed = true
 		c.snapshot.Onboarding = false
@@ -151,12 +151,12 @@ func (c *Controller) inspectCandidate(ctx context.Context, combination hyprlandh
 	switch {
 	case len(inspection.Foreign) > 0 && len(inspection.Owned) > 0:
 		c.snapshot.CandidateStatus = "conflict"
-		c.snapshot.CandidateError = "This physical key may overlap a foreign binding and runix toggle."
+		c.snapshot.CandidateError = "This key may overlap another shortcut, including the runix shortcut."
 	case len(inspection.Foreign) > 0:
 		c.snapshot.CandidateStatus = "foreign"
-		c.snapshot.CandidateError = "This physical key may overlap another binding. Choose another shortcut."
+		c.snapshot.CandidateError = "This key may overlap another shortcut. Choose a different shortcut."
 	case inspection.State == "unknown":
-		c.snapshot.CandidateError = "Cannot verify this shortcut. Check Integration and try again."
+		c.snapshot.CandidateError = "Could not check this shortcut. Check Integration and try again."
 	case len(inspection.Owned) > 0:
 		if len(inspection.Owned) == 1 && matches(inspection.Owned[0], &Assignment{
 			Action: "toggle", Combination: combination,
@@ -165,13 +165,13 @@ func (c *Controller) inspectCandidate(ctx context.Context, combination hyprlandh
 			c.snapshot.CanSave = true
 		} else {
 			c.snapshot.CandidateStatus = "conflict"
-			c.snapshot.CandidateError = "This shortcut belongs to another runix binding."
+			c.snapshot.CandidateError = "This shortcut is already used by runix."
 		}
 	case inspection.State == "free" && !inspection.Potential:
 		c.snapshot.CandidateStatus = "free"
 		c.snapshot.CanSave = true
 	default:
-		c.snapshot.CandidateError = "Cannot verify this shortcut. Choose another shortcut or check again."
+		c.snapshot.CandidateError = "Could not check this shortcut. Choose another shortcut or try again."
 	}
 }
 
@@ -207,7 +207,7 @@ func (c *Controller) remove(ctx context.Context) {
 	// Record deliberate removal before touching the working assignment. A failure
 	// here leaves it intact, and no later startup can force setup after removal.
 	if err := c.dismiss(); err != nil {
-		c.snapshot.Error = fmt.Sprintf("Cannot remember shortcut removal; assignment unchanged: %v", err)
+		c.snapshot.Error = fmt.Sprintf("Could not remember shortcut removal. The assignment was not changed: %v", err)
 		return
 	}
 	snapshot, err := c.service.Remove(ctx, c.current.Token)

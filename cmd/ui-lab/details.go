@@ -7,7 +7,7 @@ func detailFixture(id string) (string, string) {
 	if strings.HasSuffix(id, "00001") {
 		return "plain", "Plain text · Привет · 日本語 · 🚀\n\n" +
 			"<b>Not bold</b> & <img src=\"https://example.invalid/image.png\">\n**Not Markdown**\n\n" +
-			"Select this controlled fixture and copy it."
+			"Select this fixture and copy its text."
 	}
 	if strings.HasSuffix(id, "00002") {
 		return "code", "package main\n\n// <b>literal</b> & **literal** · λ\n" +
@@ -15,8 +15,8 @@ func detailFixture(id string) (string, string) {
 	}
 	if strings.HasSuffix(id, "00003") {
 		return "markdown", "# Long document\n\n" + strings.Repeat(
-			"## Scroll section\n\nUnicode: Привет · 日本語 · 🚀. Selectable **bold** and `code <tag>`.\n\n"+
-				"- First item\n- Second item\n\n", 120) + "End of controlled long document.\n"
+			"## Scroll section\n\nUnicode: Привет · 日本語 · 🚀. Select the bold text and `code <tag>`.\n\n"+
+				"- First item\n- Second item\n\n", 120) + "End of long document.\n"
 	}
 	return "markdown", "# Native details\n\n" + id + "\n\n" +
 		"## Text and code\n\n**Bold**, *emphasis*, `inline <code> & text`. Unicode: Привет · 日本語 · 🚀.\n\n" +

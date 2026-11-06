@@ -112,7 +112,7 @@ func (c *Client) Inspect(ctx context.Context, combination Combination) (Inspecti
 func (c *Client) inspect(ctx context.Context, state State, combination Combination) (Inspection, error) {
 	if !state.Ready {
 		return Inspection{State: "unknown"}, &OperationError{
-			Code: "not_ready", Message: "Wait for the Hyprland configuration to finish loading.",
+			Code: "not_ready", Message: "Wait for Hyprland to finish loading its configuration.",
 		}
 	}
 	binds, err := c.run(ctx, "-j", "binds")
@@ -164,7 +164,7 @@ func (c *Client) change(ctx context.Context, op string, expected State,
 	bounded, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 	if expected.Epoch == "" || expected.Version != protocolVersion {
-		return State{}, &OperationError{Code: "invalid_state", Message: "Read the hotkey module status first."}
+		return State{}, &OperationError{Code: "invalid_state", Message: "Check the hotkey module status first."}
 	}
 	if op == "create" || op == "replace" {
 		if err := combination.Validate(); err != nil {
@@ -175,7 +175,7 @@ func (c *Client) change(ctx context.Context, op string, expected State,
 			return current, err
 		}
 		if current.Epoch != expected.Epoch || current.Revision != expected.Revision {
-			return current, &OperationError{Code: "stale_state", Message: "Hotkeys changed. Read the current status."}
+			return current, &OperationError{Code: "stale_state", Message: "Shortcuts changed. Check the current status."}
 		}
 		if _, err = resolveExecutable(current.Executable, current.Path); err != nil {
 			return current, err
@@ -191,10 +191,10 @@ func (c *Client) change(ctx context.Context, op string, expected State,
 			}
 		}
 		if inspection.State == "unknown" {
-			return current, &OperationError{Code: "inspection_unknown", Message: "Cannot verify this shortcut."}
+			return current, &OperationError{Code: "inspection_unknown", Message: "Could not check this shortcut."}
 		}
 		if conflict {
-			return current, &OperationError{Code: "conflict", Message: "This shortcut may overlap another binding."}
+			return current, &OperationError{Code: "conflict", Message: "This shortcut may overlap another shortcut."}
 		}
 	}
 	return c.request(bounded, op, expected, handle, combination)
@@ -206,7 +206,7 @@ func (c *Client) request(ctx context.Context, op string, expected State,
 	code := `return (function() local m=rawget(_G,"runix_hotkeys"); ` +
 		`if type(m)~="table" or type(m.request)~="function" then ` +
 		`return '{"version":1,"error":{"code":"missing_module",` +
-		`"message":"Connect the runix hotkey Lua module in your Hyprland config and reload."}}' end; ` +
+		`"message":"Connect the runix hotkey Lua module in your Hyprland config, then reload."}}' end; ` +
 		`return m.request({version=1,op=` + luaString(op) + `,epoch=` + luaString(expected.Epoch) +
 		`,revision=` + strconv.FormatUint(expected.Revision, 10) + `,handle=` + luaString(handle) +
 		`,keycode=` + strconv.FormatUint(uint64(combination.Keycode), 10) +
@@ -216,20 +216,20 @@ func (c *Client) request(ctx context.Context, op string, expected State,
 	if err != nil {
 		return State{}, &OperationError{
 			Code: "transport_error", Uncertain: uncertain,
-			Message: fmt.Sprintf("Contact Hyprland: %s. Read status before retrying.", err),
+			Message: fmt.Sprintf("Could not contact Hyprland: %s. Check the status before trying again.", err),
 		}
 	}
 	var state State
 	if err = json.Unmarshal(output, &state); err != nil {
 		return State{}, &OperationError{
 			Code: "invalid_response", Uncertain: uncertain,
-			Message: "Hyprland returned an invalid hotkey response. Read status before retrying.",
+			Message: "Hyprland sent an invalid hotkey response. Check the status before trying again.",
 		}
 	}
 	if state.Version != protocolVersion {
 		return state, &OperationError{
 			Code: "unsupported_version", Uncertain: uncertain,
-			Message: "The runix hotkey module version is not supported.",
+			Message: "This runix hotkey module version is not supported.",
 		}
 	}
 	if state.Error != nil {
@@ -239,7 +239,7 @@ func (c *Client) request(ctx context.Context, op string, expected State,
 	if state.Epoch == "" || state.Bindings == nil {
 		return State{}, &OperationError{
 			Code: "invalid_response", Uncertain: uncertain,
-			Message: "The hotkey response has no lifetime marker or binding list.",
+			Message: "The hotkey response is missing required data.",
 		}
 	}
 	return state, nil

@@ -20,7 +20,7 @@ ApplicationWindow {
     }
     visible: !launcherStartHidden
     flags: Qt.Window | Qt.FramelessWindowHint
-    title: "runix UI laboratory"
+    title: "runix UI lab"
     onClosing: Qt.quit()
     Component.onCompleted: {
         windowPolicy.attach(window)
@@ -51,7 +51,7 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 Layout.minimumWidth: 0
                 elide: Text.ElideRight
-                text: "UI laboratory"
+                text: "UI lab"
                 font.pixelSize: 20
                 MouseArea { anchors.fill: parent; onPressed: windowPolicy.startMove() }
             }
@@ -153,7 +153,7 @@ ApplicationWindow {
                     TextField {
                         id: query
                         Layout.fillWidth: true
-                        placeholderText: "Search titles, workspaces, categories or IDs"
+                        placeholderText: "Search by title, workspace, category or ID"
                         focus: true
                         background: Rectangle {
                             color: window.palette.base
@@ -207,7 +207,7 @@ ApplicationWindow {
                     id: status
                     Layout.fillWidth: true
                     text: screen.info.loading ? "Searching…" : screen.info.count + " results · "
-                        + screen.info.latency_ms.toFixed(2) + " ms · selected: " + (screen.info.selected_id || "none")
+                        + screen.info.latency_ms.toFixed(2) + " ms · Selected ID: " + (screen.info.selected_id || "none")
                     textFormat: Text.PlainText
                     elide: Text.ElideRight
                 }
@@ -230,8 +230,8 @@ ApplicationWindow {
                         }
                         Label {
                             Layout.fillWidth: true
-                            text: tableScreen.tableInfo.count + " records · selected: "
-                                + (tableScreen.tableInfo.selected_id || "none") + " · activated: "
+                            text: tableScreen.tableInfo.count + " records · Selected ID: "
+                                + (tableScreen.tableInfo.selected_id || "none") + " · Activated ID: "
                                 + (tableScreen.tableInfo.activated_id || "none")
                             elide: Text.ElideRight
                         }
@@ -314,7 +314,7 @@ ApplicationWindow {
                 Label {
                     visible: searchMode.checked
                     Layout.fillWidth: true
-                    text: "Activated: " + (screen.info.activated_id || "none")
+                    text: "Activated ID: " + (screen.info.activated_id || "none")
                     textFormat: Text.PlainText
                 }
             }

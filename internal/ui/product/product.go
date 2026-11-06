@@ -229,7 +229,7 @@ func Run(args []string, options Options) error {
 	integration = installIntegration(ctx, engine, options.WindowControl)
 	shortcuts = installShortcuts(ctx, app, engine, integration, options.WindowControl)
 	lifecycle.SetErrorHandler(func(err error) {
-		activationError = "Window operation failed: " + err.Error()
+		activationError = "Could not control the window: " + err.Error()
 		failed = true
 		notifyState()
 	})
