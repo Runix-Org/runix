@@ -6,6 +6,7 @@ require (
 	github.com/alecthomas/kong v1.17.0
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/godbus/dbus/v5 v5.2.4
+	github.com/hbollon/go-edlib v1.7.0
 	github.com/mappu/miqt v0.15.0
 	github.com/sahilm/fuzzy v0.1.3
 	github.com/stretchr/testify v1.11.1

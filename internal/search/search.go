@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 )
 
 // FieldKind identifies searchable metadata without coupling it to presentation.
@@ -51,8 +52,19 @@ type Find func(context.Context, string) []Record
 type indexedField struct {
 	kind                 FieldKind
 	original, normalized string
-	words                []string
+	words                []indexedWord
 	priority             int
+}
+
+type indexedWord struct {
+	text  string
+	runes int
+}
+
+type queryToken struct {
+	text         string
+	runes, edits int
+	distances    map[string]int
 }
 
 type indexedRecord struct {
@@ -197,7 +209,12 @@ func (i *Index) search(ctx context.Context, query string, counts map[string]int6
 		return nil
 	}
 	query = i.policy.Normalize(query)
-	tokens := strings.Fields(query)
+	parts := strings.Fields(query)
+	tokens := make([]queryToken, len(parts))
+	for n, part := range parts {
+		length := utf8.RuneCountInString(part)
+		tokens[n] = queryToken{text: part, runes: length, edits: i.policy.Typo.budget(length)}
+	}
 	if ctx.Err() != nil {
 		return nil
 	}

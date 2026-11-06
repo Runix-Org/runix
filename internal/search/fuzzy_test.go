@@ -125,7 +125,7 @@ func (s *FuzzyPolicySuite) TestPolicyMatchOrderIsTunable() {
 	}
 	policy := DefaultPolicy()
 	policy.ExactNameFirst = false
-	policy.MatchOrder = [4]MatchKind{MatchPrefix, MatchExact, MatchSubstring, MatchSubsequence}
+	policy.MatchOrder = [5]MatchKind{MatchPrefix, MatchExact, MatchSubstring, MatchSubsequence, MatchTypo}
 	index := NewIndex(records, policy)
 	s.Equal("prefix", s.ids(index, "fox")[0])
 }

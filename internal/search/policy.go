@@ -14,14 +14,15 @@ const (
 	MatchPrefix
 	MatchSubstring
 	MatchSubsequence
+	MatchTypo
 )
 
-// TypoThreshold reserves the next increment's code-point based edit budget.
+// TypoThreshold assigns an edit budget starting at MinRunes normalized code points.
 type TypoThreshold struct {
 	MinRunes, MaxEdits int
 }
 
-// TypoPolicy holds planned typo tuning. This increment does not enable edit matching.
+// TypoPolicy controls whole-word OSA edit matching independently of subsequences.
 type TypoPolicy struct {
 	Enabled    bool
 	Thresholds [2]TypoThreshold
@@ -35,7 +36,7 @@ type Policy struct {
 	ResultLimit    int
 	Normalize      func(string) string
 	FieldOrder     [6]FieldKind
-	MatchOrder     [4]MatchKind
+	MatchOrder     [5]MatchKind
 	ExactNameFirst bool
 	Typo           TypoPolicy
 }
@@ -48,9 +49,9 @@ func DefaultPolicy() Policy {
 		FieldOrder: [6]FieldKind{
 			FieldName, FieldGenericName, FieldKeyword, FieldID, FieldCategory, FieldComment,
 		},
-		MatchOrder:     [4]MatchKind{MatchExact, MatchPrefix, MatchSubstring, MatchSubsequence},
+		MatchOrder:     [5]MatchKind{MatchExact, MatchPrefix, MatchSubstring, MatchSubsequence, MatchTypo},
 		ExactNameFirst: true,
-		Typo: TypoPolicy{Thresholds: [2]TypoThreshold{
+		Typo: TypoPolicy{Enabled: true, Thresholds: [2]TypoThreshold{
 			{MinRunes: 4, MaxEdits: 1}, {MinRunes: 8, MaxEdits: 2},
 		}},
 	}
@@ -80,4 +81,17 @@ func (p Policy) matchRank(kind MatchKind) int {
 		}
 	}
 	return len(p.MatchOrder)
+}
+
+func (p TypoPolicy) budget(runes int) int {
+	if !p.Enabled {
+		return 0
+	}
+	budget, threshold := 0, -1
+	for _, entry := range p.Thresholds {
+		if runes >= entry.MinRunes && entry.MinRunes >= threshold {
+			budget, threshold = entry.MaxEdits, entry.MinRunes
+		}
+	}
+	return budget
 }
