@@ -14,6 +14,7 @@ import (
 
 	"runix/data/hyprland"
 	"runix/internal/hyprlandhotkey"
+	"runix/internal/preferences"
 )
 
 var sourceDigest = sha256.Sum256([]byte(hyprland.Source))
@@ -325,27 +326,13 @@ func (m *Manager) readPreference(root string) (bool, error) {
 }
 
 func readBooleanPreference(root, key string) (bool, error) {
-	p := filepath.Join(root, "runix", "config.json")
-	if _, err := fileExistsSafe(p); err != nil {
-		return false, fmt.Errorf("integration preference file: %w", err)
-	}
-	b, err := os.ReadFile(p)
-	if errors.Is(err, os.ErrNotExist) {
-		return false, nil
-	}
+	values, err := preferences.New(root).Read()
 	if err != nil {
 		return false, fmt.Errorf("read integration preferences: %w", err)
 	}
-	var values map[string]json.RawMessage
-	if err = json.Unmarshal(b, &values); err != nil {
-		return false, fmt.Errorf("decode integration preferences: %w", err)
-	}
-	if values == nil {
-		return false, fmt.Errorf("integration preferences must be a JSON object")
-	}
 	var enabled bool
 	if raw, ok := values[key]; ok {
-		if err = json.Unmarshal(raw, &enabled); err != nil {
+		if err := json.Unmarshal(raw, &enabled); err != nil {
 			return false, fmt.Errorf("decode %s preference: %w", key, err)
 		}
 	}
@@ -357,34 +344,14 @@ func (m *Manager) savePreference(root string, value bool) error {
 }
 
 func saveBooleanPreference(root, key string, value bool) error {
-	p := filepath.Join(root, "runix", "config.json")
-	if _, err := fileExistsSafe(p); err != nil {
-		return err
-	}
-	if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
-		return err
-	}
-	v := map[string]json.RawMessage{}
-	if b, err := os.ReadFile(p); err == nil {
-		if err = json.Unmarshal(b, &v); err != nil {
-			return fmt.Errorf("read integration preferences: %w", err)
-		}
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return err
-	}
-	if v == nil {
-		return fmt.Errorf("integration preferences must be a JSON object")
-	}
 	raw, err := json.Marshal(value)
 	if err != nil {
 		return err
 	}
-	v[key] = raw
-	b, err := json.MarshalIndent(v, "", "  ")
-	if err != nil {
-		return err
-	}
-	return atomicWrite(p, append(b, '\n'), 0o600)
+	return preferences.New(root).Update(func(values map[string]json.RawMessage) error {
+		values[key] = raw
+		return nil
+	})
 }
 
 // ShortcutSetupDismissed reads the independent, remembered shortcut setup decision.

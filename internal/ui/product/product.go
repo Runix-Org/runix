@@ -18,6 +18,7 @@ import (
 	"runix/internal/desktop"
 	"runix/internal/launchable"
 	"runix/internal/search"
+	"runix/internal/ui/appearanceview"
 	"runix/internal/ui/icons"
 	"runix/internal/ui/launcher"
 	"runix/internal/ui/searchview"
@@ -49,6 +50,12 @@ func Run(args []string, options Options) error {
 	qt.QGuiApplication_SetDesktopFileName("runix")
 	qt.QGuiApplication_SetQuitOnLastWindowClosed(false)
 	engine := qml.NewQQmlApplicationEngine()
+	appearance, appearanceErr := appearanceview.Install(engine)
+	if appearanceErr != nil {
+		engine.Delete()
+		return appearanceErr
+	}
+	defer appearance.Delete()
 	ctx, cancel := context.WithCancel(context.Background())
 	var catalog atomic.Pointer[launchable.Catalog]
 	var deliveryMu sync.Mutex

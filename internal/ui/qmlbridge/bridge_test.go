@@ -14,6 +14,7 @@ func TestStartupSuite(t *testing.T) { suite.Run(t, new(StartupSuite)) }
 
 func (s *StartupSuite) TestExistingActivationPathReturnsErrorWithoutPanic() {
 	s.T().Setenv("QT_QPA_PLATFORM", "offscreen")
+	s.T().Setenv("XDG_CONFIG_HOME", s.T().TempDir())
 	directory := s.T().TempDir()
 	s.Require().NoError(os.Chmod(directory, 0o700))
 	path := filepath.Join(directory, "activation.sock")

@@ -45,15 +45,24 @@ ApplicationWindow {
             }
         }
     }
-    readonly property color themeForeground: "#e8edf2"
-    readonly property color themeSurface: "#202832"
+    readonly property color themeForeground: activeAppearance.foregrounds.primary
+    readonly property color themeSurface: activeAppearance.surfaces.b0
     palette.window: themeSurface
     palette.windowText: themeForeground
     palette.text: themeForeground
     palette.buttonText: themeForeground
-    palette.base: "#151c23"
+    palette.placeholderText: activeAppearance.foregrounds.placeholder
+    palette.base: activeAppearance.surfaces.b1
     palette.button: themeSurface
-    palette.highlight: "#38618a"
+    palette.highlight: activeAppearance.surfaces.selection
+    palette.highlightedText: activeAppearance.foregrounds["selected-text"]
+    background: Rectangle {
+        gradient: Gradient {
+            GradientStop { position: 0; color: activeAppearance.surfaces.b0 }
+            GradientStop { position: 0.7; color: activeAppearance.surfaces.b1 }
+            GradientStop { position: 1; color: activeAppearance.surfaces.b1 }
+        }
+    }
     Component.onCompleted: {
         windowPolicy.attach(window)
         launcher.window = window
@@ -131,6 +140,16 @@ ApplicationWindow {
                 }
             }
             Button { text: "Quit"; onClicked: Qt.quit() }
+        }
+        Label {
+            Layout.fillWidth: true
+            visible: text.length > 0
+            text: [activeAppearance.error, activeAppearance.fallbackReason].filter(function(value) {
+                return value.length > 0
+            }).join(" | ")
+            textFormat: Text.PlainText
+            wrapMode: Text.Wrap
+            color: activeAppearance.foregrounds.secondary
         }
         Repeater {
             id: integrationPanel

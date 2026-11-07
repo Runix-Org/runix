@@ -10,7 +10,9 @@ import (
 
 	"github.com/stretchr/testify/suite"
 	"runix/data/hyprland"
+	"runix/internal/appearance"
 	"runix/internal/hyprlandhotkey"
+	"runix/internal/theme"
 )
 
 type managerSuite struct {
@@ -222,6 +224,32 @@ func (s *managerSuite) TestInvalidPreferencesRemainIntact() {
 			s.Equal(value, s.read(config))
 		})
 	}
+}
+
+func (s *managerSuite) TestInterleavedAppearanceIntegrationAndOnboardingPreservePreferences() {
+	s.T().Setenv("XDG_CONFIG_HOME", s.root)
+	config := s.put("runix/config.json", `{"other":{"keep":7}}`)
+	hotkeys := s.put("runix/hotkeys.json", `{"keep":"independent"}`)
+	catalog, err := theme.Bundled()
+	s.Require().NoError(err)
+	state := appearance.New(s.root, catalog)
+	p := state.Snapshot().Preferences
+	p.Mode = appearance.Light
+	s.Require().NoError(saveBooleanPreference(s.root, "integration_auto_update", true))
+	s.Require().NoError(state.SetPreferences(p))
+	s.Require().NoError(DismissShortcutSetup())
+	p.ImproveContrast = true
+	s.Require().NoError(state.SetPreferences(p))
+	s.Require().NoError(saveBooleanPreference(s.root, "integration_auto_update", false))
+	s.Equal(p, appearance.New(s.root, catalog).Snapshot().Preferences)
+	dismissed, err := ShortcutSetupDismissed()
+	s.Require().NoError(err)
+	s.True(dismissed)
+	var stored map[string]json.RawMessage
+	s.Require().NoError(json.Unmarshal([]byte(s.read(config)), &stored))
+	s.JSONEq(`false`, string(stored["integration_auto_update"]))
+	s.JSONEq(`{"keep":7}`, string(stored["other"]))
+	s.Equal(`{"keep":"independent"}`, s.read(hotkeys))
 }
 
 func (s *managerSuite) TestDisabledAndCanceledSetupPerformNoWork() {

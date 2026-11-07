@@ -8,13 +8,22 @@ ApplicationWindow {
     property var searchInput: null
     readonly property var labTheme: themeLoader.item
     Loader { id: themeLoader; sourceComponent: labThemeComponent }
-    palette.window: labTheme ? labTheme.surface : "#202832"
-    palette.windowText: labTheme ? labTheme.foreground : "#e8edf2"
+    palette.window: activeAppearance.surfaces.b0
+    palette.windowText: activeAppearance.foregrounds.primary
     palette.text: palette.windowText
     palette.buttonText: palette.windowText
-    palette.base: labTheme ? labTheme.field : "#151c23"
+    palette.placeholderText: activeAppearance.foregrounds.placeholder
+    palette.base: activeAppearance.surfaces.b1
     palette.button: palette.window
-    palette.highlight: labTheme ? labTheme.accent : "#79b8ff"
+    palette.highlight: activeAppearance.surfaces.selection
+    palette.highlightedText: activeAppearance.foregrounds["selected-text"]
+    background: Rectangle {
+        gradient: Gradient {
+            GradientStop { position: 0; color: activeAppearance.surfaces.b0 }
+            GradientStop { position: 0.7; color: activeAppearance.surfaces.b1 }
+            GradientStop { position: 1; color: activeAppearance.surfaces.b1 }
+        }
+    }
     onVisibleChanged: {
         if (!visible && formItem) formItem.cancel()
     }
@@ -44,8 +53,8 @@ ApplicationWindow {
 
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: window.labTheme ? window.labTheme.spacing * 2 : 16
-        spacing: window.labTheme ? window.labTheme.spacing : 8
+        anchors.margins: window.labTheme.spacing * 2
+        spacing: window.labTheme.spacing
         RowLayout {
             Label {
                 Layout.fillWidth: true
@@ -60,6 +69,93 @@ ApplicationWindow {
                 id: quit
                 text: "Quit"
                 onClicked: Qt.quit()
+            }
+        }
+        ColumnLayout {
+            Layout.fillWidth: true
+            function save(key, value) {
+                const next = Object.assign({}, activeAppearance.preferences)
+                next[key] = value
+                activeAppearance.setPreferences(next)
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                Label { text: "Appearance (development)" }
+                ComboBox {
+                    id: appearanceMode
+                    model: ["System", "Light", "Dark"]
+                    currentIndex: ["system", "light", "dark"].indexOf(activeAppearance.preferences.mode)
+                    onActivated: function(index) { parent.parent.save("mode", ["system", "light", "dark"][index]) }
+                }
+                CheckBox {
+                    id: improveContrast
+                    text: "Improve contrast"
+                    checked: activeAppearance.preferences.improve_contrast
+                    onClicked: parent.parent.save("improve_contrast", checked)
+                }
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                Label { text: "Light" }
+                ComboBox {
+                    id: lightTheme
+                    Layout.fillWidth: true
+                    model: activeAppearance.lightThemes
+                    textRole: "name"
+                    currentIndex: model.findIndex(function(entry) {
+                        return entry.id === activeAppearance.preferences.light_id
+                    })
+                    onActivated: function(index) { parent.parent.save("light_id", model[index].id) }
+                }
+                Label { text: "Dark" }
+                ComboBox {
+                    id: darkTheme
+                    Layout.fillWidth: true
+                    model: activeAppearance.darkThemes
+                    textRole: "name"
+                    currentIndex: model.findIndex(function(entry) {
+                        return entry.id === activeAppearance.preferences.dark_id
+                    })
+                    onActivated: function(index) { parent.parent.save("dark_id", model[index].id) }
+                }
+            }
+            Label {
+                id: appearanceStatus
+                Layout.fillWidth: true
+                wrapMode: Text.Wrap
+                textFormat: Text.PlainText
+                color: activeAppearance.foregrounds.secondary
+                text: activeAppearance.name + " | System: " + activeAppearance.scheme
+                    + (activeAppearance.fallbackReason ? " | " + activeAppearance.fallbackReason : "")
+                    + (activeAppearance.error ? " | " + activeAppearance.error : "")
+            }
+            Component.onCompleted: {
+                if (typeof semanticDebug === "undefined") return
+                semanticDebug.registerControl("appearance-mode", appearanceMode, "combobox", "Appearance mode",
+                    ["focus", "select"], null, false)
+                semanticDebug.controls["appearance-mode"].select = function(text) {
+                    const index = ["system", "light", "dark"].indexOf(text)
+                    if (index < 0) return false
+                    appearanceMode.activated(index)
+                    return true
+                }
+                semanticDebug.registerControl("appearance-contrast", improveContrast, "checkbox", "Improve contrast",
+                    ["focus", "activate"], function() { improveContrast.toggle(); improveContrast.clicked() }, false)
+                for (const pair of [["appearance-light", lightTheme], ["appearance-dark", darkTheme]]) {
+                    const control = pair[1]
+                    semanticDebug.registerControl(pair[0], control, "combobox", pair[0], ["focus", "select"], null, false)
+                    semanticDebug.controls[pair[0]].select = function(text) {
+                        const index = control.model.findIndex(function(entry) { return entry.id === text })
+                        if (index < 0) return false
+                        control.currentIndex = index
+                        control.activated(index)
+                        return true
+                    }
+                }
+                semanticDebug.registerControl("appearance-status", appearanceStatus, "status", "Active appearance", [], null, false)
+                semanticDebug.controls["appearance-status"].inspect = function() {
+                    return activeAppearance.snapshot
+                }
             }
         }
         RowLayout {
@@ -157,7 +253,7 @@ ApplicationWindow {
                         focus: true
                         background: Rectangle {
                             color: window.palette.base
-                            radius: window.labTheme ? window.labTheme.radius : 5
+                            radius: window.labTheme.radius
                             border.color: query.activeFocus ? window.palette.highlight : window.palette.mid
                             border.width: query.activeFocus ? 2 : 1
                         }

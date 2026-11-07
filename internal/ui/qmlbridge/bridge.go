@@ -10,6 +10,7 @@ import (
 	"runix/internal/commands"
 	"runix/internal/search"
 	"runix/internal/table"
+	"runix/internal/ui/appearanceview"
 	"runix/internal/ui/detailview"
 	"runix/internal/ui/formview"
 	"runix/internal/ui/icons"
@@ -60,6 +61,12 @@ func Run(
 	qt.QGuiApplication_SetDesktopFileName("runix-ui-lab")
 
 	engine := qml.NewQQmlApplicationEngine()
+	appearance, appearanceErr := appearanceview.Install(engine)
+	if appearanceErr != nil {
+		engine.Delete()
+		return appearanceErr
+	}
+	defer appearance.Delete()
 	source := icons.New(options.IconThemePaths, options.IconThemes)
 	var activate func(string, uint64)
 	if options.Activate != nil {

@@ -4,6 +4,7 @@ import (
 	"runtime"
 	"testing"
 
+	"runix/internal/ui/appearanceview"
 	"runix/internal/ui/shared"
 
 	qt "github.com/mappu/miqt/qt6"
@@ -21,6 +22,10 @@ func (s *AdapterSuite) TestClearingSelectedResultRemovesOldDetail() {
 	app := qt.NewQApplication([]string{"detail-regression", "-platform", "offscreen"})
 	defer app.Delete()
 	engine := qml.NewQQmlApplicationEngine()
+	s.T().Setenv("XDG_CONFIG_HOME", s.T().TempDir())
+	appearance, appearanceErr := appearanceview.Install(engine)
+	s.Require().NoError(appearanceErr)
+	defer appearance.Delete()
 	seen := false
 	adapter, err := Install(engine, func(id string) (string, string) {
 		seen = id == "selected-record"
