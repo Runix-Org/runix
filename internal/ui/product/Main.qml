@@ -4,6 +4,43 @@ import QtQuick.Layouts
 
 ApplicationWindow {
     id: window
+    // Hosts only: the engine-owned controls retain native focus and editing.
+    component Action: Loader {
+        id: action
+        property string text: ""
+        property bool busy: false
+        property bool primary: false
+        property bool destructive: false
+        signal clicked()
+        sourceComponent: runixButtonComponent
+        onLoaded: {
+            item.text = Qt.binding(function() { return action.text })
+            item.busy = Qt.binding(function() { return action.busy })
+            item.font.bold = Qt.binding(function() { return action.primary })
+            item.destructive = Qt.binding(function() { return action.destructive })
+            item.clicked.connect(action.clicked)
+        }
+    }
+    component Notice: RowLayout {
+        id: notice
+        property string text: ""
+        property string hue: "blue"
+        Layout.fillWidth: true
+        visible: text.length > 0
+        spacing: runixControlStyle.spacing
+        Label {
+            text: ({red: "!", yellow: "⚠", green: "✓", blue: "i"})[notice.hue] || "i"
+            color: runixControlStyle.hueIcon(notice.hue)
+            Layout.alignment: Qt.AlignTop
+        }
+        Label {
+            Layout.fillWidth: true
+            text: notice.text
+            textFormat: Text.PlainText
+            color: runixControlStyle.text
+            wrapMode: Text.Wrap
+        }
+    }
     visible: false
     title: "runix"
     flags: Qt.Window | Qt.FramelessWindowHint
@@ -114,7 +151,7 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 MouseArea { anchors.fill: parent; onPressed: windowPolicy.startMove() }
             }
-            Button {
+            Action {
                 id: settingsButton
                 text: window.settingsOpen ? "Back" : "Settings"
                 visible: !window.integrationOpen && !window.onboarding
@@ -127,7 +164,7 @@ ApplicationWindow {
                     }
                 }
             }
-            Button {
+            Action {
                 id: integrationButton
                 text: window.integrationOpen ? "Back" : "Integration"
                 visible: window.integrationOpen || window.settingsOpen || window.onboarding
@@ -139,13 +176,7 @@ ApplicationWindow {
                     } else window.openIntegration()
                 }
             }
-            Loader {
-                sourceComponent: runixButtonComponent
-                onLoaded: {
-                    item.text = "Quit"
-                    item.clicked.connect(function() { Qt.quit() })
-                }
-            }
+            Action { text: "Quit"; onClicked: Qt.quit() }
         }
         Label {
             Layout.fillWidth: true
@@ -169,7 +200,7 @@ ApplicationWindow {
                 property bool copied: false
                 readonly property bool needsInstall: info.module_state === "missing" || info.module_state === "stale"
                 function request(action) {
-                    model.command = JSON.stringify({action: action, automatic: automatic.checked})
+                    model.command = JSON.stringify({action: action, automatic: automatic.item ? automatic.item.checked : false})
                 }
                 onInfoChanged: {
                     if (!window.integrationStartupResolved) {
@@ -183,12 +214,18 @@ ApplicationWindow {
                 }
                 ScrollView {
                     id: setupScroll
+                    ScrollBar.vertical: runixScrollBarComponent.createObject(null)
+                    background: Item {}
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     clip: true
                     contentWidth: availableWidth
+                    contentHeight: setupContent.implicitHeight + 8
                     ColumnLayout {
-                        width: setupScroll.availableWidth
+                        id: setupContent
+                        x: 4
+                        y: 4
+                        width: Math.max(0, setupScroll.availableWidth - 8)
                         spacing: 16
                         RowLayout {
                             Layout.fillWidth: true
@@ -200,22 +237,20 @@ ApplicationWindow {
                             }
                             Label {
                                 text: setup.info.busy ? "Checking…" : setup.info.available ? "Connected" : "Not connected"
-                                color: setup.info.available ? "#93d5aa" : "#aebcca"
+                                color: setup.info.busy ? runixControlStyle.loader : setup.info.available
+                                    ? runixControlStyle.hueText("green") : runixControlStyle.secondary
                                 font.pixelSize: 12
                             }
                         }
-                        Label {
-                            Layout.fillWidth: true
+                        Notice {
                             text: setup.info.status || ""
-                            textFormat: Text.PlainText
-                            color: setup.info.phase === "error" ? "#ff8a80" : "#aebcca"
-                            wrapMode: Text.Wrap
+                            hue: setup.info.phase === "error" ? "red" : setup.info.available ? "green" : "blue"
                         }
                         Pane {
                             Layout.fillWidth: true
                             visible: !!setup.info.path
                             padding: 16
-                            background: Rectangle { color: "#151c23"; radius: 8; border.color: "#34414e" }
+                            background: Item {}
                             ColumnLayout {
                                 anchors.fill: parent
                                 spacing: 8
@@ -229,13 +264,14 @@ ApplicationWindow {
                                     Label {
                                         visible: setup.info.module_state === "current"
                                         text: "Current version installed"
-                                        color: "#93d5aa"
+                                        color: runixControlStyle.hueText("green")
                                     }
-                                    Button {
+                                    Action {
                                         objectName: "installIntegration"
                                         text: setup.info.module_state === "missing" ? "Install" : "Update"
                                         visible: setup.needsInstall
                                         enabled: !setup.info.busy
+                                        busy: setup.info.busy
                                         onClicked: setup.request("install")
                                     }
                                 }
@@ -245,7 +281,7 @@ ApplicationWindow {
                                     textFormat: Text.PlainText
                                     font.family: "monospace"
                                     font.pixelSize: 12
-                                    color: "#aebcca"
+                                    color: runixControlStyle.secondary
                                     wrapMode: Text.WrapAnywhere
                                 }
                             }
@@ -254,7 +290,7 @@ ApplicationWindow {
                             Layout.fillWidth: true
                             visible: !!setup.info.require && !setup.info.available
                             padding: 16
-                            background: Rectangle { color: "#151c23"; radius: 8; border.color: "#34414e" }
+                            background: Item {}
                             ColumnLayout {
                                 anchors.fill: parent
                                 spacing: 10
@@ -265,13 +301,13 @@ ApplicationWindow {
                                         font.bold: true
                                         Layout.fillWidth: true
                                     }
-                                    Button {
+                                    Action {
                                         objectName: "copyIntegration"
                                         text: setup.copied ? "Copied" : "Copy"
                                         onClicked: {
-                                            requireCode.selectAll()
-                                            requireCode.copy()
-                                            requireCode.deselect()
+                                            requireCode.item.selectAll()
+                                            requireCode.item.copy()
+                                            requireCode.item.deselect()
                                             setup.copied = true
                                             copiedTimer.restart()
                                         }
@@ -280,59 +316,64 @@ ApplicationWindow {
                                 Label {
                                     Layout.fillWidth: true
                                     text: "Add this line to hyprland.lua. Then click Reload and check."
-                                    color: "#aebcca"
+                                    color: runixControlStyle.secondary
                                     wrapMode: Text.Wrap
                                 }
-                                TextArea {
+                                Loader {
                                     id: requireCode
-                                    objectName: "integrationCode"
                                     Layout.fillWidth: true
-                                    text: setup.info.require || ""
-                                    textFormat: TextEdit.PlainText
-                                    font.family: "monospace"
-                                    font.pixelSize: 12
-                                    readOnly: true
-                                    selectByMouse: true
-                                    wrapMode: TextEdit.WrapAnywhere
-                                    onTextChanged: setup.copied = false
+                                    sourceComponent: runixTextAreaComponent
+                                    onLoaded: {
+                                        item.objectName = "integrationCode"
+                                        item.text = Qt.binding(function() { return setup.info.require || "" })
+                                        item.textFormat = TextEdit.PlainText
+                                        item.font.family = "monospace"
+                                        item.font.pixelSize = 12
+                                        item.readOnly = true
+                                        item.wrapMode = TextEdit.WrapAnywhere
+                                        item.textChanged.connect(function() { setup.copied = false })
+                                    }
                                 }
-                                Button {
+                                Action {
                                     text: "Reload and check"
                                     enabled: !setup.info.busy && setup.info.module_state === "current"
                                     onClicked: setup.request("confirm")
                                 }
                             }
                         }
-                        CheckBox {
+                        Loader {
                             id: automatic
                             Layout.fillWidth: true
                             visible: setup.info.phase !== "unavailable"
                             enabled: !setup.info.busy
-                            text: "Install and update the module at startup"
-                            checked: !!setup.info.automatic
-                            onToggled: setup.request("preference")
+                            sourceComponent: runixCheckBoxComponent
+                            onLoaded: {
+                                item.text = "Install and update the module at startup"
+                                item.checked = Qt.binding(function() { return !!setup.info.automatic })
+                                item.toggled.connect(function() { setup.request("preference") })
+                            }
                         }
                         Label {
                             Layout.fillWidth: true
                             visible: setup.info.phase !== "unavailable"
                             text: "Updates and connection checks reload Hyprland. Runix never changes your Hyprland configuration."
                             font.pixelSize: 12
-                            color: "#aebcca"
+                            color: runixControlStyle.secondary
                             wrapMode: Text.Wrap
                         }
                     }
                 }
                 RowLayout {
                     Layout.fillWidth: true
-                    Button {
+                    Action {
                         text: "Check again"
                         enabled: !setup.info.busy
                         onClicked: setup.request("refresh")
                     }
                     Item { Layout.fillWidth: true }
-                    Button {
+                    Action {
                         text: setup.info.available ? "Continue" : "Not now"
-                        highlighted: true
+                        primary: true
                         onClicked: {
                             window.integrationStartupResolved = true
                             window.integrationOpen = false
@@ -353,13 +394,16 @@ ApplicationWindow {
             model: shortcutState
             delegate: ScrollView {
                 id: shortcuts
+                ScrollBar.vertical: runixScrollBarComponent.createObject(null)
+                background: Item {}
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 visible: window.settingsOpen && !window.integrationOpen
                 clip: true
                 contentWidth: availableWidth
+                contentHeight: shortcutContent.implicitHeight + 8
                 readonly property var info: JSON.parse(model.snapshot)
-                readonly property var focusControl: skipShortcut
+                readonly property var focusControl: skipShortcut.item
                 function request(action) { model.command = JSON.stringify({action: action}) }
                 function combination(value) {
                     if (!value) return "Not assigned"
@@ -402,7 +446,10 @@ ApplicationWindow {
                     }
                 }
                 ColumnLayout {
-                    width: shortcuts.availableWidth
+                    id: shortcutContent
+                    x: 4
+                    y: 4
+                    width: Math.max(0, shortcuts.availableWidth - 8)
                     spacing: 8
                     Label {
                         text: window.onboarding ? "Set up your shortcut" : "Keyboard shortcut"
@@ -420,13 +467,9 @@ ApplicationWindow {
                         textFormat: Text.PlainText
                         wrapMode: Text.Wrap
                     }
-                    Label {
-                        Layout.fillWidth: true
-                        visible: !!shortcuts.info.error
+                    Notice {
                         text: shortcuts.info.error || ""
-                        textFormat: Text.PlainText
-                        color: "#ff8a80"
-                        wrapMode: Text.Wrap
+                        hue: "red"
                     }
                     Label {
                         Layout.fillWidth: true
@@ -435,48 +478,71 @@ ApplicationWindow {
                             + "You can also continue without a shortcut."
                         wrapMode: Text.Wrap
                     }
-                    Label {
+                    Pane {
                         Layout.fillWidth: true
-                        text: shortcuts.info.recording ? "Press a key combination. Press Escape to cancel."
-                            : shortcuts.info.candidate ? "New shortcut: " + shortcuts.combination(shortcuts.info.candidate)
-                                + " · " + shortcuts.candidateStatus(shortcuts.info.candidate_status)
-                            : "Press Record shortcut, then press a key. You can hold Ctrl, Alt, Shift, or Super."
-                        textFormat: Text.PlainText
-                        wrapMode: Text.Wrap
+                        padding: 10
+                        background: Item {
+                            Rectangle {
+                                anchors.fill: parent
+                                radius: runixControlStyle.radius
+                                color: runixControlStyle.button
+                                border.width: 1
+                                border.color: shortcuts.info.recorder_error || shortcuts.info.candidate_error
+                                    ? runixControlStyle.error : runixControlStyle.separator
+                            }
+                            Rectangle {
+                                anchors.fill: parent
+                                anchors.margins: -2
+                                radius: runixControlStyle.radius + 2
+                                color: "transparent"
+                                border.width: shortcuts.info.recording ? 2 : 0
+                                border.color: runixControlStyle.focus
+                            }
+                        }
+                        Label {
+                            width: parent.width
+                            text: shortcuts.info.recording ? "Press a key combination. Press Escape to cancel."
+                                : shortcuts.info.candidate ? "New shortcut: " + shortcuts.combination(shortcuts.info.candidate)
+                                    + " · " + shortcuts.candidateStatus(shortcuts.info.candidate_status)
+                                : "Press Record shortcut, then press a key. You can hold Ctrl, Alt, Shift, or Super."
+                            textFormat: Text.PlainText
+                            color: runixControlStyle.text
+                            wrapMode: Text.Wrap
+                        }
                     }
-                    Label {
-                        Layout.fillWidth: true
-                        visible: !!shortcuts.info.recorder_error || !!shortcuts.info.candidate_error
+                    Notice {
                         text: shortcuts.info.recorder_error || shortcuts.info.candidate_error || ""
-                        textFormat: Text.PlainText
-                        color: "#ff8a80"
-                        wrapMode: Text.Wrap
+                        hue: "red"
                     }
                     Label {
                         Layout.fillWidth: true
                         text: "A keycode is the number of a physical key. It stays the same when you change keyboard layouts."
+                        color: runixControlStyle.secondary
                         wrapMode: Text.Wrap
                     }
                     Flow {
                         Layout.fillWidth: true
                         spacing: 8
-                        Button {
+                        Action {
                             text: shortcuts.info.recording ? "Cancel recording" : "Record shortcut"
                             enabled: shortcuts.info.recording || (!shortcuts.info.busy && shortcuts.info.available)
                             onClicked: shortcuts.request(shortcuts.info.recording ? "cancel" : "record")
                         }
-                        Button {
+                        Action {
                             text: window.onboarding ? "Save and continue" : "Save"
+                            primary: true
+                            busy: shortcuts.info.busy
                             enabled: !shortcuts.info.busy && !shortcuts.info.recording && shortcuts.info.can_save
                             onClicked: shortcuts.request("apply")
                         }
-                        Button {
+                        Action {
                             text: "Remove"
+                            destructive: true
                             visible: !!shortcuts.info.saved
                             enabled: !shortcuts.info.busy && !shortcuts.info.recording && shortcuts.info.available
                             onClicked: shortcuts.request("remove")
                         }
-                        Button {
+                        Action {
                             text: "Check again"
                             enabled: !shortcuts.info.busy && !shortcuts.info.recording
                             onClicked: {
@@ -484,8 +550,8 @@ ApplicationWindow {
                                 shortcuts.request("refresh")
                             }
                         }
-                        Button { text: "Integration"; onClicked: window.openIntegration() }
-                        Button {
+                        Action { text: "Integration"; onClicked: window.openIntegration() }
+                        Action {
                             id: skipShortcut
                             text: window.onboarding ? "Not now" : "Back to applications"
                             enabled: !window.onboarding || !shortcuts.info.busy
@@ -496,7 +562,11 @@ ApplicationWindow {
                             }
                         }
                     }
-                    Label { visible: !!shortcuts.info.busy; text: "Checking or saving shortcut..." }
+                    Label {
+                        visible: !!shortcuts.info.busy
+                        text: "◌ Checking or saving shortcut..."
+                        color: runixControlStyle.loader
+                    }
                 }
             }
         }
@@ -509,35 +579,25 @@ ApplicationWindow {
                 Layout.fillHeight: true
                 readonly property bool loading: model.loading
                 readonly property bool failed: model.failed
-                Label {
-                    Layout.fillWidth: true
-                    visible: window.shortcutNotice !== ""
+                Notice {
                     text: window.shortcutNotice
-                    textFormat: Text.PlainText
-                    wrapMode: Text.Wrap
-                    color: "#ff8a80"
+                    hue: "red"
                 }
                 Label {
                     Layout.fillWidth: true
                     text: model.status
+                    visible: !catalog.loading
+                    color: runixControlStyle.secondary
                     textFormat: Text.PlainText
                     wrapMode: Text.Wrap
                 }
-                Label {
-                    Layout.fillWidth: true
-                    visible: model.activation_error !== ""
+                Notice {
                     text: model.activation_error
-                    textFormat: Text.PlainText
-                    wrapMode: Text.Wrap
-                    color: "#ff8a80"
+                    hue: "red"
                 }
-                Label {
-                    Layout.fillWidth: true
-                    visible: model.history_warning !== ""
+                Notice {
                     text: model.history_warning
-                    textFormat: Text.PlainText
-                    wrapMode: Text.Wrap
-                    color: "#f0c674"
+                    hue: "yellow"
                 }
                 Repeater {
                     model: searchState
@@ -546,42 +606,51 @@ ApplicationWindow {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
                         readonly property var info: JSON.parse(model.snapshot)
-                        TextField {
+                        Loader {
                             id: query
                             Layout.fillWidth: true
-                            color: window.palette.text
-                            placeholderTextColor: "#aab6c2"
-                            placeholderText: "Search applications"
-                            selectByMouse: true
-                            text: search.info.query || ""
-                            onTextEdited: model.command = JSON.stringify({op: "query", text: text})
+                            sourceComponent: runixTextFieldComponent
+                            onLoaded: {
+                                item.search = true
+                                item.placeholderText = "Search applications"
+                                item.text = Qt.binding(function() { return search.info.query || "" })
+                                item.textEdited.connect(function() {
+                                    model.command = JSON.stringify({op: "query", text: item.text})
+                                })
+                                item.Keys.upPressed.connect(function(event) {
+                                    if (results.item) results.item.move(-1)
+                                    event.accepted = true
+                                })
+                                item.Keys.downPressed.connect(function(event) {
+                                    if (results.item) results.item.move(1)
+                                    event.accepted = true
+                                })
+                                function activate(event) {
+                                    if (!event.isAutoRepeat && results.item) results.item.activate()
+                                    event.accepted = true
+                                }
+                                item.Keys.returnPressed.connect(activate)
+                                item.Keys.enterPressed.connect(activate)
+                                item.Keys.pressed.connect(function(event) {
+                                    if (!results.item) return
+                                    if (event.key === Qt.Key_PageDown || event.key === Qt.Key_PageUp) {
+                                        results.item.move(event.key === Qt.Key_PageDown ? 6 : -6)
+                                        event.accepted = true
+                                    }
+                                })
+                                updateFocus()
+                            }
                             function updateFocus() {
-                                launcher.query = window.integrationOpen ? integrationButton
+                                launcher.query = window.integrationOpen ? integrationButton.item
                                     : window.settingsOpen ? (window.onboarding && shortcutPanel.itemAt(0)
-                                        ? shortcutPanel.itemAt(0).focusControl : settingsButton) : query
+                                        ? shortcutPanel.itemAt(0).focusControl : settingsButton.item) : item
                                 if (window.visible && launcher.query) launcher.query.forceActiveFocus()
                             }
-                            Component.onCompleted: updateFocus()
                             Connections {
                                 target: window
                                 function onIntegrationOpenChanged() { query.updateFocus() }
                                 function onSettingsOpenChanged() { query.updateFocus() }
                                 function onOnboardingChanged() { query.updateFocus() }
-                            }
-                            Keys.onUpPressed: { if (results.item) results.item.move(-1) }
-                            Keys.onDownPressed: { if (results.item) results.item.move(1) }
-                            Keys.onReturnPressed: function(event) {
-                                if (!event.isAutoRepeat && results.item) results.item.activate()
-                            }
-                            Keys.onEnterPressed: function(event) {
-                                if (!event.isAutoRepeat && results.item) results.item.activate()
-                            }
-                            Keys.onPressed: function(event) {
-                                if (!results.item) return
-                                if (event.key === Qt.Key_PageDown || event.key === Qt.Key_PageUp) {
-                                    results.item.move(event.key === Qt.Key_PageDown ? 6 : -6)
-                                    event.accepted = true
-                                }
                             }
                         }
                         Loader {
@@ -596,24 +665,33 @@ ApplicationWindow {
                             Layout.fillWidth: true
                             Layout.fillHeight: true
                             visible: catalog.loading || catalog.failed
+                            Label {
+                                anchors.centerIn: parent
+                                width: parent.width
+                                horizontalAlignment: Text.AlignHCenter
+                                text: catalog.loading ? "◌ Loading applications…" : "Applications are unavailable"
+                                color: catalog.loading ? runixControlStyle.loader : runixControlStyle.text
+                                wrapMode: Text.Wrap
+                            }
                         }
                         Label {
                             Layout.fillWidth: true
                             text: search.info.selected_label || ""
+                            color: runixControlStyle.secondary
                             textFormat: Text.PlainText
                             wrapMode: Text.WrapAnywhere
                         }
                         RowLayout {
-                            Button {
+                            Action {
                                 text: "Open"
+                                primary: true
+                                busy: window.launchInfo.busy
                                 enabled: search.info.activation_enabled && !search.info.loading && search.info.selected_index >= 0
                                 onClicked: { if (results.item) results.item.activate() }
                             }
-                            Label {
-                                Layout.fillWidth: true
+                            Notice {
                                 text: window.launchInfo.status
-                                textFormat: Text.PlainText
-                                wrapMode: Text.Wrap
+                                hue: window.launchInfo.busy ? "blue" : "red"
                             }
                         }
                     }
