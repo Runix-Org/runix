@@ -1,0 +1,968 @@
+{
+  "repository": "https://github.com/raycast/ray-so",
+  "revision": "1298a944166d53d59e6211609366cbfdd08da623",
+  "collection": "app/(navigation)/themes/themes",
+  "license": "LICENSE (upstream root MIT notice)",
+  "releaseNote": "Closed prototype only. Contributor theme coverage needs review before public redistribution.",
+  "total": 106,
+  "dark": 73,
+  "light": 33,
+  "numericVersions": 13,
+  "stringVersions": 93,
+  "themes": [
+    {
+      "path": "alex/dark-blue-600.json",
+      "name": "Alex's Dark Blue 600",
+      "author": "Alex",
+      "authorUsername": "alex",
+      "appearance": "dark",
+      "version": "1",
+      "sha256": "66f669bc1bb82266158399ed1950c537eb5636bec458931f9e2a1a00502788fa"
+    },
+    {
+      "path": "astrit/monochrome.json",
+      "name": "Monochrome",
+      "author": "Astrit",
+      "authorUsername": "astrit",
+      "appearance": "dark",
+      "version": "1",
+      "sha256": "1e2521ece838e8c7d6e8f8796aae3f10898dba64a8ace459b469120257f9acdb"
+    },
+    {
+      "path": "ayu-mirage-owl.json",
+      "name": "Ayu Mirage Owl 🦉",
+      "author": "Abhi Mehrotra",
+      "authorUsername": "speedy_bee",
+      "appearance": "dark",
+      "version": "1",
+      "sha256": "925c6dd1ac36614fba04d8fd6186332fdbf252175bcc3218c6b87c4e4e79b6a8"
+    },
+    {
+      "path": "barry/palenight.json",
+      "name": "Palenight",
+      "author": "Barry",
+      "authorUsername": "barry",
+      "appearance": "dark",
+      "version": "1",
+      "sha256": "169cc97e4c92bc842e4f650594804dcec2dd91f606d9c1bc9e56fe9c825da461"
+    },
+    {
+      "path": "bdsqqq/vesper-dark-orange-only.json",
+      "name": "Vesper dark orange only",
+      "author": "Igor Bedesqui",
+      "authorUsername": "bdsqqq",
+      "appearance": "dark",
+      "version": "1",
+      "sha256": "4d46145e992fe5a1f213560333d55532a270fe693edefde7dea81bc5b32db30d"
+    },
+    {
+      "path": "bdsqqq/vesper-dark.json",
+      "name": "Vesper dark",
+      "author": "Igor Bedesqui",
+      "authorUsername": "bdsqqq",
+      "appearance": "dark",
+      "version": "1",
+      "sha256": "d0db08840a9f3f3a925b39be0de75849bdf5670add6560e11c2bc9eb36c64b12"
+    },
+    {
+      "path": "ble4K/everforest.json",
+      "name": "Everforest",
+      "author": "Sam-Ashley",
+      "authorUsername": "Ble4K",
+      "appearance": "dark",
+      "version": "1",
+      "sha256": "2b029f0f26125fef7e9489980a53359ddabeeb42744c52136b114abe04280d3a"
+    },
+    {
+      "path": "catppuccin-org/catppuccin-frappe.json",
+      "name": "Catppuccin Frappe",
+      "author": "Catppuccin",
+      "authorUsername": "catppuccin-org",
+      "appearance": "dark",
+      "version": "1",
+      "sha256": "ea693c3b370467ef98c66ffca234ae42503681be68e276d9d09f50be630d6914"
+    },
+    {
+      "path": "catppuccin-org/catppuccin-latte.json",
+      "name": "Catppuccin Latte",
+      "author": "Catppuccin",
+      "authorUsername": "catppuccin-org",
+      "appearance": "light",
+      "version": "1",
+      "sha256": "c7ea6efa1af493a277ac30626d35b0512b4bf15930952ad548ddecca91eb89fa"
+    },
+    {
+      "path": "catppuccin-org/catppuccin-macchiato.json",
+      "name": "Catppuccin Macchiato",
+      "author": "Catppuccin",
+      "authorUsername": "catppuccin-org",
+      "appearance": "dark",
+      "version": "1",
+      "sha256": "ec31cbc3b612be31db6fd77d9fad007e3f35204cadaf146bb92c0ac046fb8d41"
+    },
+    {
+      "path": "catppuccin-org/catppuccin-mocha.json",
+      "name": "Catppuccin Mocha",
+      "author": "Catppuccin",
+      "authorUsername": "catppuccin-org",
+      "appearance": "dark",
+      "version": "1",
+      "sha256": "67c34ba8f8a151aeaae77f0d69194f0e8514ed8b0666f57ad100dc61efcbe27d"
+    },
+    {
+      "path": "chris/almost-cyan.json",
+      "name": "Almost Cyan",
+      "author": "Chris",
+      "authorUsername": "chris",
+      "appearance": "dark",
+      "version": "1",
+      "sha256": "82e5703f33eb0fd5a9a435d6cd10d80b8eed31bdd7986582c9accda971c22025"
+    },
+    {
+      "path": "chris/barcelona-sky.json",
+      "name": "Barcelona Sky",
+      "author": "Chris",
+      "authorUsername": "chris",
+      "appearance": "light",
+      "version": "1",
+      "sha256": "887ea79680ab5844f35a2b849a622a8a8ff266d1f49803800d4c8f328c7cac56"
+    },
+    {
+      "path": "chris/dark-cyan.json",
+      "name": "Dark+Cyan",
+      "author": "Chris",
+      "authorUsername": "chris",
+      "appearance": "dark",
+      "version": "1",
+      "sha256": "62dbc2e60f2fe65950bba04012556998eef5ba95c6eaff528f13b74f025f98e3"
+    },
+    {
+      "path": "danhollick/atom-one-light.json",
+      "name": "Atom One Light",
+      "author": "Daniel Hollick",
+      "authorUsername": "danhollick",
+      "appearance": "light",
+      "version": "1",
+      "sha256": "c034e9721916a36707652534e6d02ff8414d47beb5c62b6ff8435679dd9d334b"
+    },
+    {
+      "path": "danhollick/dusk.json",
+      "name": "Dusk",
+      "author": "Daniel Hollick",
+      "authorUsername": "danhollick",
+      "appearance": "light",
+      "version": "1",
+      "sha256": "07a048f0c9647dd5a0c0524f3b8942220bb718087ab69936bd935ab80d8a54e7"
+    },
+    {
+      "path": "danhollick/greenish.json",
+      "name": "Greenish",
+      "author": "Daniel Hollick",
+      "authorUsername": "danhollick",
+      "appearance": "light",
+      "version": "1",
+      "sha256": "11c2634125d012bdb02521d1703b277a9808d86fc45480a139e0e10d59676905"
+    },
+    {
+      "path": "danhollick/solarised.json",
+      "name": "Solarised",
+      "author": "Daniel Hollick",
+      "authorUsername": "danhollick",
+      "appearance": "light",
+      "version": "1",
+      "sha256": "ecd2a9dd6f6e9e405c830664b340f6872ffe9be77d12153711b28c592252aced"
+    },
+    {
+      "path": "danhollick/submarine.json",
+      "name": "Submarine",
+      "author": "Daniel Hollick",
+      "authorUsername": "danhollick",
+      "appearance": "dark",
+      "version": "1",
+      "sha256": "93e33656327b6c4b3c146f6091fe0c1ebb1fed1eab6a8b3c9272b9fbec7a7844"
+    },
+    {
+      "path": "daniel/gradient-solarised.json",
+      "name": "Gradient Solarised",
+      "author": "Daniel",
+      "authorUsername": "daniel",
+      "appearance": "light",
+      "version": "1",
+      "sha256": "513b6268cc5ce425f51f2ba729a0f8820f0e36589e429d37ce3bc90c5603431a"
+    },
+    {
+      "path": "daniel/purple-puke.json",
+      "name": "Purple Puke",
+      "author": "Daniel",
+      "authorUsername": "daniel",
+      "appearance": "dark",
+      "version": "1",
+      "sha256": "b60d789c1f9a5bb52b61b01e2a6858c2b5b09be320a6621b16bea623b9c037d5"
+    },
+    {
+      "path": "dannyseidel/alpenglow.json",
+      "name": "Alpenglow",
+      "author": "Danny Seidel",
+      "authorUsername": "DannySeidel",
+      "appearance": "dark",
+      "version": "1",
+      "sha256": "565b7268f2c45fa27c3507ab209c67ce52e9d44c2a4948dc71a682f5d4f93c35"
+    },
+    {
+      "path": "degouville/brutalist-dark.json",
+      "name": "Brutalist Dark",
+      "author": "Mathieu de Gouville",
+      "authorUsername": "degouville",
+      "appearance": "dark",
+      "version": 1,
+      "sha256": "6005d2334f55a3b87e76aef92477a32c8e0df0f9e40289a3c3b16ea881a855db"
+    },
+    {
+      "path": "degouville/brutalist-light.json",
+      "name": "Brutalist Light",
+      "author": "Mathieu de Gouville",
+      "authorUsername": "degouville",
+      "appearance": "light",
+      "version": 1,
+      "sha256": "e51dfb8ed6fa0bd814c8f0b971e14919a6b93c674350d97d0e3cb8eaab6ad8a2"
+    },
+    {
+      "path": "degouville/martinique.json",
+      "name": "Martinique",
+      "author": "Mathieu de Gouville",
+      "authorUsername": "degouville",
+      "appearance": "dark",
+      "version": "1",
+      "sha256": "568a7b5806058f9ffa804a61b6fdf6f75eff8933017680ab9f81b7c24bf65824"
+    },
+    {
+      "path": "folke/Tokyo Night.json",
+      "name": "Tokyo Night",
+      "author": "Folke",
+      "authorUsername": "folke",
+      "appearance": "dark",
+      "version": "1",
+      "sha256": "d5ca43b796b1fb8cf53b9a9fd21974b25307f16ac7a168bba1831e30b4e5ee6f"
+    },
+    {
+      "path": "ianspryn/christmas-dark.json",
+      "name": "Christmas Dark",
+      "author": "Ian Spryn",
+      "authorUsername": "ianspryn",
+      "appearance": "dark",
+      "version": "1",
+      "sha256": "08f0b17674db4b5de1fd18088dd38088dd3acbcd737234d6d46d620f971695db"
+    },
+    {
+      "path": "ianspryn/christmas-light.json",
+      "name": "Christmas Light",
+      "author": "Ian Spryn",
+      "authorUsername": "ianspryn",
+      "appearance": "light",
+      "version": "1",
+      "sha256": "70f7ecc0addc063e815408be3041edf7ea44008d42e11a7dbb84e6c97157a274"
+    },
+    {
+      "path": "ikupenov/sonoma-dark.json",
+      "name": "Sonoma Dark",
+      "author": "Iliyan Kupenov",
+      "authorUsername": "ikupenov",
+      "appearance": "dark",
+      "version": "1",
+      "sha256": "4d21d8cd33db62f38a488a7855ee5ece729b2d36fe224686befd146d10605619"
+    },
+    {
+      "path": "ikupenov/sonoma-light.json",
+      "name": "Sonoma Light",
+      "author": "Iliyan Kupenov",
+      "authorUsername": "ikupenov",
+      "appearance": "light",
+      "version": "1",
+      "sha256": "38716a752957de6524a5a21ef7994b7385ece17d8925730088be44c01119c984"
+    },
+    {
+      "path": "izakjackson/monokai-spectrum.json",
+      "name": "Monokai Spectrum",
+      "author": "Izak Jackson",
+      "authorUsername": "izakjackson",
+      "appearance": "dark",
+      "version": "1",
+      "sha256": "14c86fe6986a87e83eb88a27b701e17c88f9dac01e977d7f377036a0495176d8"
+    },
+    {
+      "path": "izakjackson/poimandres.json",
+      "name": "Poimandres",
+      "author": "Izak Jackson",
+      "authorUsername": "izakjackson",
+      "appearance": "dark",
+      "version": "1",
+      "sha256": "c377b280251bf788e9cefc2cefbea1190afef498bee957469ada759c8fa0510a"
+    },
+    {
+      "path": "jag-k/total-gray.json",
+      "name": "Raycast Total Grey",
+      "author": "Jag_k",
+      "authorUsername": "jag_k",
+      "appearance": "dark",
+      "version": "1",
+      "sha256": "14bcdfd56e8359959ade0f6def41bdd2c1f603c98ea95e630802a2fd4c49b06a"
+    },
+    {
+      "path": "jahir/jahir-light.json",
+      "name": "Jahir Light",
+      "author": "Jahir",
+      "authorUsername": "jahir",
+      "appearance": "light",
+      "version": "1",
+      "sha256": "bff9b9506b9a109e32fb32a0c41e780e4aae1474b9b95e971fd30a756575e17a"
+    },
+    {
+      "path": "joanamcs/xgeeks-dark.json",
+      "name": "xgeeks Dark",
+      "author": "Joana Santos",
+      "authorUsername": "joanamcs",
+      "appearance": "dark",
+      "version": "1",
+      "sha256": "d604fd17069ed11bea9e30e4be80cff357d8865d0759adc12996ed0a8f7b5f60"
+    },
+    {
+      "path": "joanamcs/xgeeks-light.json",
+      "name": "xgeeks Light",
+      "author": "Joana Santos",
+      "authorUsername": "joanamcs",
+      "appearance": "light",
+      "version": "1",
+      "sha256": "1c61c6e0079c551d8f14519d3227ce61c5a7b20a2a943c79db4f45d65cf5812d"
+    },
+    {
+      "path": "joshua_burri/nord-dark.json",
+      "name": "Nord Dark",
+      "author": "Joshua Burri",
+      "authorUsername": "joshua_burri",
+      "appearance": "dark",
+      "version": "1",
+      "sha256": "d437107225d2d186290d365576a9fb32f38aed9c2c9611ae6d8078267f07c188"
+    },
+    {
+      "path": "joshua_burri/nordlight.json",
+      "name": "Nord Light",
+      "author": "Joshua Burri",
+      "authorUsername": "joshua_burri",
+      "appearance": "light",
+      "version": "1",
+      "sha256": "7dadfde297afb573203d93fda117cd48f629f2325b27499eb95b8df52bac90c2"
+    },
+    {
+      "path": "juanbanchero/toothpaste.json",
+      "name": "Toothpaste",
+      "author": "Juan Banchero",
+      "authorUsername": "JuanBanchero",
+      "appearance": "dark",
+      "version": "1",
+      "sha256": "f3e6537b74145f494b3b03c0f152b671ac67da068b08503fde2d882a787a9b0a"
+    },
+    {
+      "path": "keisto/monokai-sun.json",
+      "name": "Monokai Sun",
+      "author": "Tony Keiser",
+      "authorUsername": "keisto",
+      "appearance": "light",
+      "version": "1",
+      "sha256": "f8a390d1deb430a41981938db0cb93ff16eace1b52c73eee23481e906a41b9a1"
+    },
+    {
+      "path": "kevin-batdorf/shades-of-purple.json",
+      "name": "Shades of Purple",
+      "author": "Kevin Batdorf",
+      "authorUsername": "kevin_batdorf",
+      "appearance": "dark",
+      "version": "1",
+      "sha256": "47a4145d013fc10365026a6729677b77df15f2b9f14f3eb2cefcdfc526c6f79b"
+    },
+    {
+      "path": "kevin-batdorf/synthwave-84-neon.json",
+      "name": "Synthwave '84 Neon",
+      "author": "Kevin Batdorf",
+      "authorUsername": "kevin_batdorf",
+      "appearance": "dark",
+      "version": "1",
+      "sha256": "a872012a894bb2280e2f66aeb93d402022c8a3659a3da270b84530fc5bced10a"
+    },
+    {
+      "path": "kevin-ridgway/synthgreen-86-dark.json",
+      "name": "SynthGreen '86",
+      "author": "Kevin Ridgway",
+      "authorUsername": "kevin_ridgway",
+      "appearance": "dark",
+      "version": "1",
+      "sha256": "4907e53f9e278c076d5dd0cb1758ca57f1916c17ea140c6599afdd23422928eb"
+    },
+    {
+      "path": "kevin-ridgway/synthgreen-86-light.json",
+      "name": "SynthGreen '86 Light",
+      "author": "Kevin Ridgway",
+      "authorUsername": "kevin_ridgway",
+      "appearance": "light",
+      "version": "1",
+      "sha256": "b78f517fb1dbc0241fa88fcedb5eb33b851f3ed9cf8dcfd8aa98e078c8addd93"
+    },
+    {
+      "path": "kevinlangleyjr/slatewave.json",
+      "name": "Slatewave",
+      "author": "Kevin Langley Jr",
+      "authorUsername": "kevinlangleyjr",
+      "appearance": "dark",
+      "version": "1",
+      "sha256": "50ee95c0c75f4689044af6d6f2a5cf383635bd62d1002c98b6d349bce18c01cd"
+    },
+    {
+      "path": "lepidox/trutley-awesome.json",
+      "name": "Turtley Awesome",
+      "author": "Lepidox",
+      "authorUsername": "lepidox",
+      "appearance": "dark",
+      "version": "1",
+      "sha256": "8ec2fdefb8c3b8d1e0442e7f32aa8880660de03eef5f8e2a08b9c02b45f46768"
+    },
+    {
+      "path": "lex-unix/guava.json",
+      "name": "Guava",
+      "author": "Lex",
+      "authorUsername": "lex-unix",
+      "appearance": "dark",
+      "version": "1",
+      "sha256": "85ca741db85098367f87d350c77416b6611bd898756db01302768292eb806ae0"
+    },
+    {
+      "path": "lockeag/Tokyo Night Storm.json",
+      "name": "Tokyo Night Storm",
+      "author": "Locke",
+      "authorUsername": "lockeag",
+      "appearance": "dark",
+      "version": "1",
+      "sha256": "482075df6c744fdabde47e0964517275c838f9565d9426155a3c6e732f95380f"
+    },
+    {
+      "path": "luisFilipePT/polar-night.json",
+      "name": "Polar Night",
+      "author": "Luis Filipe",
+      "authorUsername": "luisFilipePT",
+      "appearance": "dark",
+      "version": "1",
+      "sha256": "57b417dd3c81ef1f7ed5144aed956bc77b6ec8e19bd48c4013908d0aef845500"
+    },
+    {
+      "path": "luisFilipePT/snow-storm.json",
+      "name": "Snow Storm",
+      "author": "Luis Filipe",
+      "authorUsername": "luisFilipePT",
+      "appearance": "light",
+      "version": "1",
+      "sha256": "cad69bb9cc526962474b27bb83351cc1c76c0e41ca21e17001a0a18cac03b378"
+    },
+    {
+      "path": "luxonauta/alucard.json",
+      "name": "Alucard",
+      "author": "Lucas de França",
+      "authorUsername": "luxonauta",
+      "appearance": "light",
+      "version": "1",
+      "sha256": "60d1f1bf782fea639d664a117e169360ece2c43b702897ae5bdcd0d7f5ff71e4"
+    },
+    {
+      "path": "mackomaxo/atom-one-dark.json",
+      "name": "Atom One Dark",
+      "author": "Macko++",
+      "authorUsername": "MackoMaxo",
+      "appearance": "dark",
+      "version": "1",
+      "sha256": "e9dd83dfaea8bb75675f91f51867018e516dca8e03c05e0755e2eb5713a659b9"
+    },
+    {
+      "path": "marlon/github-dark-dimmed.json",
+      "name": "GitHub Dark Dimmed",
+      "author": "Marlon",
+      "authorUsername": "marlon",
+      "appearance": "dark",
+      "version": "1",
+      "sha256": "31f85caea3a4519d0512f1d5cbca9c80ad803528ade20b85a62f2c08dfd75ff7"
+    },
+    {
+      "path": "marlon/github-dark.json",
+      "name": "GitHub Dark",
+      "author": "Marlon",
+      "authorUsername": "marlon",
+      "appearance": "dark",
+      "version": "1",
+      "sha256": "8aea8b20bf47ad13761e8533fe8bec1e850c96d28b65a1df72b1dd96f01f675a"
+    },
+    {
+      "path": "marlon/lakers.json",
+      "name": "Lakers",
+      "author": "Marlon",
+      "authorUsername": "marlon",
+      "appearance": "dark",
+      "version": "1",
+      "sha256": "71a2005b5946ba6e037d7e33b3a8f2df42127fc4cfc8b65cd77c9203dda88207"
+    },
+    {
+      "path": "michael-andreuzza/sequoia-monochrome-dark.json",
+      "name": "Sequoia Monochrome Dark",
+      "author": "Micheal Andreuzza",
+      "authorUsername": "michael-andreuzza",
+      "appearance": "dark",
+      "version": 1,
+      "sha256": "5f713e59770735f1191e432e66d6d5f3c0487718182facb699f54f9629c3ddff"
+    },
+    {
+      "path": "michael-andreuzza/sequoia-monochrome-light.json",
+      "name": "Sequoia Monochrome Light",
+      "author": "Micheal Andreuzza",
+      "authorUsername": "michael-andreuzza",
+      "appearance": "light",
+      "version": 1,
+      "sha256": "8328654ea5aa69d3881394d069e3bc21488d7575b7e40b233af3ffcbc2284bc3"
+    },
+    {
+      "path": "michael-andreuzza/sequoia-moonlight-dark.json",
+      "name": "Sequoia Moonlight Dark",
+      "author": "Micheal Andreuzza",
+      "authorUsername": "michael-andreuzza",
+      "appearance": "dark",
+      "version": 1,
+      "sha256": "f27fa10ec9908a25a4a5c3a346d6a587fe17ff4211481bf93324c2e091900d05"
+    },
+    {
+      "path": "michael-andreuzza/sequoia-moonlight-light.json",
+      "name": "Sequoia Moonlight Light",
+      "author": "Micheal Andreuzza",
+      "authorUsername": "michael-andreuzza",
+      "appearance": "light",
+      "version": 1,
+      "sha256": "a58c2e95dc349b1de07f640a6fe0f39dd187ac9f76c5467ff3034c6091657d28"
+    },
+    {
+      "path": "michael-andreuzza/sequoia-retro-dark.json",
+      "name": "Sequoia Retro Dark",
+      "author": "Micheal Andreuzza",
+      "authorUsername": "michael-andreuzza",
+      "appearance": "dark",
+      "version": 1,
+      "sha256": "ee8d1049ec09ee8f2a75c1e1248c8583101201a57332a8cb1953edb6052b937e"
+    },
+    {
+      "path": "michael-andreuzza/sequoia-retro-light.json",
+      "name": "Sequoia Retro Light",
+      "author": "Micheal Andreuzza",
+      "authorUsername": "michael-andreuzza",
+      "appearance": "light",
+      "version": 1,
+      "sha256": "cd471f879bdfc28c9fed2f7e0d2618cba2e25618fcad1d592e92b77e709fa1da"
+    },
+    {
+      "path": "michael-andreuzza/serendipity-midnight.json",
+      "name": "Serendipity Midnight",
+      "author": "Micheal Andreuzza",
+      "authorUsername": "michael-andreuzza",
+      "appearance": "dark",
+      "version": 1,
+      "sha256": "7c3774315390ec25d2de2fab07b264b137c294eb2cb9397e67a87ec1a7c500d4"
+    },
+    {
+      "path": "michael-andreuzza/serendipity-morning.json",
+      "name": "Serendipity Morning",
+      "author": "Micheal Andreuzza",
+      "authorUsername": "michael-andreuzza",
+      "appearance": "light",
+      "version": 1,
+      "sha256": "ce65f78bdb7c22236dec6dec7472a309b6d58931e66ccf66907a9e280bbe94db"
+    },
+    {
+      "path": "michael-andreuzza/serendipity-sunset.json",
+      "name": "Serendipity Sunset",
+      "author": "Micheal Andreuzza",
+      "authorUsername": "michael-andreuzza",
+      "appearance": "dark",
+      "version": 1,
+      "sha256": "013bd656accdd86151268f81ea4c97cc4ad54ae81df99ee10df954942e43d325"
+    },
+    {
+      "path": "michael-schultz/forest.json",
+      "name": "Forest",
+      "author": "Michael Schultz",
+      "authorUsername": "michael_schultz",
+      "appearance": "dark",
+      "version": "1",
+      "sha256": "9765f190c4e2b268c87ae1cdc8c86fb55069fcbe020dfbc8f1376da5ef7a2828"
+    },
+    {
+      "path": "nagauta/nadeshiko.json",
+      "name": "Nadeshiko",
+      "author": "M.Y.",
+      "authorUsername": "nagauta",
+      "appearance": "light",
+      "version": "1",
+      "sha256": "25e427287ba5974dffb24e3db26f0a91938519a318fa58d998907f33d7d6ed20"
+    },
+    {
+      "path": "nagauta/rikyucha.json",
+      "name": "Rikyucha",
+      "author": "M Yano",
+      "authorUsername": "nagauta",
+      "appearance": "light",
+      "version": "1",
+      "sha256": "3448baf0dc607dd001507d828d7e3ff0822e7bae42b50bb35ef0a281b4d03163"
+    },
+    {
+      "path": "noah-raskin/la-rosa.json",
+      "name": "La Rosa (Light)",
+      "author": "Noah Raskin",
+      "authorUsername": "noahraskin",
+      "appearance": "light",
+      "version": "1",
+      "sha256": "b238ee02981e97335c0841f068f50ef8bed33de8e8e85926b2cb238ee371e81b"
+    },
+    {
+      "path": "noah-raskin/linear.json",
+      "name": "Linear Theme",
+      "author": "Noah Raskin",
+      "authorUsername": "noahraskin",
+      "appearance": "dark",
+      "version": "1",
+      "sha256": "c9864234850c985f010ae7609a78d9663e1f99f662a42a1e533e48479dc482b6"
+    },
+    {
+      "path": "noah-raskin/mistallic.json",
+      "name": "Mistallic",
+      "author": "Noah Raskin",
+      "authorUsername": "HeyNoah",
+      "appearance": "dark",
+      "version": "1",
+      "sha256": "d5ae71797ffac453e3a410dd7de0aacb6fac46f581874543c0449ca9616b8cdc"
+    },
+    {
+      "path": "peduarte/blue.json",
+      "name": "Blue Boy",
+      "author": "Pedro Duarte",
+      "authorUsername": "peduarte",
+      "appearance": "light",
+      "version": 1,
+      "sha256": "aa18126f0075998a1a40e78209d041a27a9f30f897fa0e003510d1c8beab793c"
+    },
+    {
+      "path": "peduarte/red.json",
+      "name": "Red Boy",
+      "author": "Pedro Duarte",
+      "authorUsername": "peduarte",
+      "appearance": "light",
+      "version": 1,
+      "sha256": "f09fae2718fa6797d6fb5450898f6df8221eddc8bfaa7e86c58e6720a436843f"
+    },
+    {
+      "path": "peduarte/spotify.json",
+      "name": "Spotify",
+      "author": "Pedro Duarte",
+      "authorUsername": "peduarte",
+      "appearance": "dark",
+      "version": "1",
+      "sha256": "f996721d7df1c73533ff912ab5e0d560ad10f0232672f0a780d00ce66fa97265"
+    },
+    {
+      "path": "per-tikaer/dracula.json",
+      "name": "Dracula",
+      "author": "Per Tikær",
+      "authorUsername": "per_tikaer",
+      "appearance": "dark",
+      "version": "1",
+      "sha256": "f53b54157409879f66ddcfc35a592cb1e4300d4efdac4a5c3a8d31bdf4d5bfc6"
+    },
+    {
+      "path": "per-tikaer/fresh-ocean.json",
+      "name": "Fresh Ocean",
+      "author": "Per Tikær",
+      "authorUsername": "per_tikaer",
+      "appearance": "light",
+      "version": "1",
+      "sha256": "2699c5b256e572254617f1df09bde83864bc1430b0cc1ea078807c3ba8e68721"
+    },
+    {
+      "path": "per-tikaer/gruvbox.json",
+      "name": "Gruvbox",
+      "author": "Per Tikær",
+      "authorUsername": "per_tikaer",
+      "appearance": "dark",
+      "version": "1",
+      "sha256": "c0fab905105012737b102d380a81d70b8db35270e9c3e69114ddde7e8f9241d1"
+    },
+    {
+      "path": "per-tikaer/terminal.json",
+      "name": "Terminal",
+      "author": "Per Tikær",
+      "authorUsername": "per_tikaer",
+      "appearance": "dark",
+      "version": "1",
+      "sha256": "9186f9336c84bdeb6ef2a302dc57f0cbeaea367996232b4a9d7dbb09c9a496f8"
+    },
+    {
+      "path": "pixelpanda/arc.json",
+      "name": "Arc",
+      "author": "Drew Andersen",
+      "authorUsername": "PixelPandaCreative",
+      "appearance": "dark",
+      "version": "1",
+      "sha256": "820ded00a8e304c352c2ee720a9f1a1ddf942509e7c88b3aa0ad058565eb6266"
+    },
+    {
+      "path": "pixelpanda/comfy.json",
+      "name": "Comfy",
+      "author": "Drew Andersen",
+      "authorUsername": "PixelPandaCreative",
+      "appearance": "light",
+      "version": "1",
+      "sha256": "07e0f8eac758982561acd071f8f7dd85a4c2e8f6ca168408b0f3d7ae5606914a"
+    },
+    {
+      "path": "raf/catpuccin-x-gruvbox.json",
+      "name": "Catppuccin x Gruvbox",
+      "author": "Raf",
+      "authorUsername": "raf",
+      "appearance": "dark",
+      "version": "1",
+      "sha256": "67ba524655c395dc1e6cceaf9dcd3e97ae01e05ba67a23e7814db21715ed5d8e"
+    },
+    {
+      "path": "rob-hewitt/raicast.json",
+      "name": "RAIcast",
+      "author": "Rob Hewitt",
+      "authorUsername": "rob_hewitt",
+      "appearance": "dark",
+      "version": "1",
+      "sha256": "2ef39e9bc8a21f75556fa0fbd541e68cb7e1ae6efcc9baefb1d721c4954c99c7"
+    },
+    {
+      "path": "robert/github-light.json",
+      "name": "GitHub Light",
+      "author": "Robert",
+      "authorUsername": "robert",
+      "appearance": "light",
+      "version": "1",
+      "sha256": "8318fd8b710a41d9abc371a8bbea58d1e4aabdede7cc4913cc2cb861fb620046"
+    },
+    {
+      "path": "rubinho/dragonfire.json",
+      "name": "Dragon Fire",
+      "author": "Rúben Gomes",
+      "authorUsername": "rubinho",
+      "appearance": "dark",
+      "version": "1",
+      "sha256": "582d018c36e051cebf37359943b8e910b9211bab5109d7e1b3965b44980a92bb"
+    },
+    {
+      "path": "rubinho/nightrose.json",
+      "name": "Night Rose",
+      "author": "Rúben Gomes",
+      "authorUsername": "rubinho",
+      "appearance": "dark",
+      "version": "1",
+      "sha256": "fe26432e33fe466d45719846757888993bbfdb234a1f3b315eb21b741b81e471"
+    },
+    {
+      "path": "sean-rose/black-opal.json",
+      "name": "Black Opal",
+      "author": "Sean Rose",
+      "authorUsername": "sean_rose",
+      "appearance": "dark",
+      "version": "1",
+      "sha256": "d0d543b42904c7ffd21380980819ea1b53fca085c136ebade60030c43610d77c"
+    },
+    {
+      "path": "sean-rose/tokyo-neon.json",
+      "name": "Tokyo Neon",
+      "author": "Sean Rose",
+      "authorUsername": "sean_rose",
+      "appearance": "dark",
+      "version": "1",
+      "sha256": "8061cec6168f5526084e6a61bba1610427914a48c24817a3081a24181557e5d1"
+    },
+    {
+      "path": "shubh_porwal/aura.json",
+      "name": "Aura",
+      "author": "Shubh Porwal",
+      "authorUsername": "shubh_porwal",
+      "appearance": "dark",
+      "version": "1",
+      "sha256": "d7c5b795ec1d96afd516e989f64919d71a3fd3fb562fa7d0bac1a73d7b33c6c2"
+    },
+    {
+      "path": "simayo/doom-one-dark.json",
+      "name": "Doom One Dark",
+      "author": "Simon",
+      "authorUsername": "simayo",
+      "appearance": "dark",
+      "version": "1",
+      "sha256": "5a2b177eeb00eeda582262bb2bcddfa2832dd4b0291f8f8ae7d202e212d3b586"
+    },
+    {
+      "path": "stelo/darkstar.json",
+      "name": "Darkstar",
+      "author": "stelo",
+      "authorUsername": "stelo",
+      "appearance": "dark",
+      "version": "1",
+      "sha256": "b0430c58eb15518a52f5c95255068b8c8dce4b1925ff31356b3622acdb888fbc"
+    },
+    {
+      "path": "stephen-kaplan/ember.json",
+      "name": "Ember",
+      "author": "Stephen Kaplan",
+      "authorUsername": "stephen_kaplan",
+      "appearance": "dark",
+      "version": "1",
+      "sha256": "a75b19e62bf4c298a424c937a324fcaf9d2158f751418ef1de9964810281c351"
+    },
+    {
+      "path": "steve-simkins/kanagawa.json",
+      "name": "Kanagawa",
+      "author": "Steve Simkins",
+      "authorUsername": "steve_simkins",
+      "appearance": "dark",
+      "version": "1",
+      "sha256": "5e90025ae8c8ca0386e0e9172f3f759559110c3d132acc40b2e697122e98c093"
+    },
+    {
+      "path": "tarik/purple-mist.json",
+      "name": "Purple Mist",
+      "author": "Tarik",
+      "authorUsername": "tarik",
+      "appearance": "dark",
+      "version": "1",
+      "sha256": "5fca17b9fde135124e4a5065dec217911380d7d03faa5ca68f79e931f6f08ad7"
+    },
+    {
+      "path": "tarik/yellow-plastic_mi.json",
+      "name": "Yellow Plastic MI",
+      "author": "Tarik",
+      "authorUsername": "tarik",
+      "appearance": "light",
+      "version": "1",
+      "sha256": "9144b9960efa02540e559c18edd11b920fb419f2a53cda2d2bc5eaf579030b6e"
+    },
+    {
+      "path": "tholanda/yankees-blue.json",
+      "name": "Yankees Blue",
+      "author": "Thiago Holanda",
+      "authorUsername": "tholanda",
+      "appearance": "dark",
+      "version": "1",
+      "sha256": "6f01288c55a175971f5ee087af3f100805e4b1ad1d17a3f1ee73c5398aa38da3"
+    },
+    {
+      "path": "thomas-lombart/oceanic-bliss.json",
+      "name": "Oceanic Bliss",
+      "author": "Thomas Lombart",
+      "authorUsername": "thomas_lombart",
+      "appearance": "dark",
+      "version": "1",
+      "sha256": "52391a9027c9ac80f70962457bb5789db1b79db6e1a5a9e92b58b7aea14a3a95"
+    },
+    {
+      "path": "thomas-novaro/blossom.json",
+      "name": "Blossom",
+      "author": "Thomas Novaro",
+      "authorUsername": "thomnova",
+      "appearance": "light",
+      "version": "1",
+      "sha256": "da8be3898933fb9d4820488d6eb6609ce6bd472b12f85bf218dbe198bc17fd64"
+    },
+    {
+      "path": "thomas-novaro/dusk.json",
+      "name": "Dusk",
+      "author": "Thomas Novaro",
+      "authorUsername": "thomnova",
+      "appearance": "dark",
+      "version": "1",
+      "sha256": "690fb5df94359c211d4b0b06f61da94f79d8aaef803dce3052647eeb0414f451"
+    },
+    {
+      "path": "thomas/knight-rider.json",
+      "name": "Knight Rider",
+      "author": "Thomas Paul Mann",
+      "authorUsername": "thomas",
+      "appearance": "dark",
+      "version": "1",
+      "sha256": "82978e097cb8644081fd5af2ce6bb433dc9d1e24c909ba1d89927b690e08e13f"
+    },
+    {
+      "path": "tomica/modus-operandi.json",
+      "name": "Modus Operandi",
+      "author": "Ivan Tomica",
+      "authorUsername": "tomica",
+      "appearance": "light",
+      "version": "1",
+      "sha256": "ce0f050ad0b1248378d5f91ce3c97581703f6f70cd3e15337b9fe0b157d6b0ff"
+    },
+    {
+      "path": "tomica/modus-vivendi.json",
+      "name": "Modus Vivendi",
+      "author": "Ivan Tomica",
+      "authorUsername": "tomica",
+      "appearance": "dark",
+      "version": "1",
+      "sha256": "4e254c0bcd51818ad12cbeca3b00d7e09c7e6fd7d9eeba2b341ae452abfb89bc"
+    },
+    {
+      "path": "ulianov/vesper.json",
+      "name": "Vesper",
+      "author": "Dmytro Ulianov",
+      "authorUsername": "ulianov",
+      "appearance": "dark",
+      "version": "1",
+      "sha256": "eb4396eca3e087786e495b9860a4c74494f073691f7a30ded48cb8e64471e745"
+    },
+    {
+      "path": "vatsalsanjay/purple.json",
+      "name": "Raycast Dark - Purple",
+      "author": "Vatsal Sanjay",
+      "authorUsername": "vatsalsanjay",
+      "appearance": "dark",
+      "version": "1",
+      "sha256": "a9ead4ccd887f4b6e052c8d1118b2448b399272f1590552a541f0e722e47413f"
+    },
+    {
+      "path": "vyacheslav/light-owl.json",
+      "name": "Light Owl",
+      "author": "Vyacheslav Pukhanov",
+      "authorUsername": "vyacheslav",
+      "appearance": "light",
+      "version": "1",
+      "sha256": "43110fbe65627793492dfef3de9b765e08108e6b26d28abd8295711a092ec1bb"
+    },
+    {
+      "path": "vyacheslav/night-owl.json",
+      "name": "Night Owl",
+      "author": "Vyacheslav Pukhanov",
+      "authorUsername": "vyacheslav",
+      "appearance": "dark",
+      "version": "1",
+      "sha256": "da831e19cc5cbc4b20425d9ca154ecb3fb6ca2cd0b780c0ff6f8dda07f58ba63"
+    },
+    {
+      "path": "wesbos/cobalt2.json",
+      "name": "Cobalt 2",
+      "author": "Wes Bos",
+      "authorUsername": "wesbos",
+      "appearance": "dark",
+      "version": "1",
+      "sha256": "f84818f6d4e64e039ecabcf3aaf2ec47c27f113733f88a669ac182c1be899c41"
+    },
+    {
+      "path": "zander/rose-moon.json",
+      "name": "Rosé Pine Moon",
+      "author": "Zander",
+      "authorUsername": "zander",
+      "appearance": "dark",
+      "version": "1",
+      "sha256": "d30550daa25eb5a176a9be5cb9136a789d747b11fb3dce9485271786859c4ea8"
+    }
+  ]
+}
