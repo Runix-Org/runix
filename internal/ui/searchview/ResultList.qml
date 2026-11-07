@@ -30,7 +30,8 @@ FocusScope {
             if (child.recordKey !== undefined && child.y + child.height > list.contentY
                     && child.y < list.contentY + list.height)
                 rows.push({index: child.rowIndex, id: child.recordKey, title: child.rowTitle,
-                    icon_status: child.iconStatus, icon_width: child.iconWidth})
+                    icon_status: child.iconStatus, icon_width: child.iconWidth,
+                    selected: child.highlighted, hovered: child.hovered, pressed: child.pressed})
         }
         rows.sort(function(a, b) { return a.index - b.index })
         return {state: info, delegates: delegateCount, viewport_height: list.height,
@@ -56,7 +57,7 @@ FocusScope {
         cacheBuffer: 0
         reuseItems: true
         boundsBehavior: Flickable.StopAtBounds
-        ScrollBar.vertical: ScrollBar {}
+        ScrollBar.vertical: runixScrollBarComponent.createObject(null)
         delegate: ItemDelegate {
             id: row
             required property int index
@@ -76,8 +77,19 @@ FocusScope {
             highlighted: index === root.info.selected_index
             enabled: !root.info.loading
             focusPolicy: Qt.NoFocus
-            background: Rectangle {
-                color: row.highlighted ? row.palette.highlight : "transparent"
+            hoverEnabled: true
+            background: Item {
+                Rectangle {
+                    anchors.fill: parent
+                    color: row.highlighted ? activeAppearance.surfaces.selected
+                        : runixControlStyle.wash(row)
+                }
+                Rectangle {
+                    width: 2
+                    height: parent.height
+                    visible: row.highlighted
+                    color: activeAppearance.foregrounds["selection-marker"]
+                }
             }
             contentItem: Row {
                 spacing: 10
@@ -99,7 +111,7 @@ FocusScope {
                         width: parent.width
                         text: row.title + (row.category ? "  ·  " + row.category : "")
                         textFormat: Text.PlainText
-                        color: row.palette.text
+                        color: row.enabled ? runixControlStyle.text : runixControlStyle.disabled
                         elide: Text.ElideRight
                     }
                     Label {
@@ -107,7 +119,7 @@ FocusScope {
                         text: row.subtitle + "  [" + row.displayID + "]"
                         textFormat: Text.PlainText
                         font.pixelSize: 12
-                        color: row.palette.text
+                        color: row.enabled ? runixControlStyle.secondary : runixControlStyle.disabled
                         elide: Text.ElideRight
                     }
                 }
@@ -122,7 +134,8 @@ FocusScope {
         anchors.centerIn: parent
         visible: root.info.loading || list.count === 0
         text: root.info.loading ? "Searching…" : "No results"
+        textFormat: Text.PlainText
+        color: runixControlStyle.text
         padding: 12
-        background: Rectangle { color: palette.window }
     }
 }

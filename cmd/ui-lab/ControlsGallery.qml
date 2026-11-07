@@ -4,6 +4,7 @@ import QtQuick.Layouts
 
 ScrollView {
     id: gallery
+    ScrollBar.vertical: runixScrollBarComponent.createObject(null)
     clip: true
     contentWidth: availableWidth
     contentHeight: galleryContent.implicitHeight + 8
@@ -26,9 +27,15 @@ ScrollView {
             view.contentY = Math.min(maximum, y + item.height + 4 - availableHeight)
     }
     function inspect(control) {
-        return {
+        const result = {
             focused: control.activeFocus, visual_focus: control.visualFocus,
             hovered: control.hovered, pressed: control.pressed,
+            opened: control.opened === undefined ? null : control.opened,
+            popup_open: control.popup && control.popup.visible !== undefined ? control.popup.visible
+                : control === actionMenuButton.item ? actionMenu.item.opened
+                : control === dialogButton.item ? dialogPopup.item.opened
+                : control === popoverButton.item ? popoverPopup.item.opened
+                : control === tooltipButton.item ? tooltipPopup.item.visible : null,
             checked: control.checked === undefined ? null : control.checked,
             read_only: control.readOnly === undefined ? null : control.readOnly,
             value: control.value === undefined ? null : control.value,
@@ -36,6 +43,16 @@ ScrollView {
             selection_end: control.selectionEnd === undefined ? null : control.selectionEnd,
             activations: activationCount
         }
+        if (control.currentIndex !== undefined) {
+            result.current_index = control.currentIndex
+            result.display_text = control.displayText
+        }
+        if (control.recording !== undefined) {
+            result.recording = control.recording
+            result.shortcut = control.sequence
+        }
+        if (control === actionMenuButton.item) result.menu_index = actionMenu.item.currentIndex
+        return result
     }
     ButtonGroup { id: radioChoices }
     ColumnLayout {
@@ -209,6 +226,141 @@ ScrollView {
             sourceComponent: runixSliderComponent
             onLoaded: { item.from = 0; item.to = 100; item.value = 35; item.enabled = false }
         }
+        Label { text: "Selection and menus"; font.bold: true }
+        RowLayout {
+            Layout.fillWidth: true
+            Loader {
+                id: selectionBox
+                sourceComponent: runixComboBoxComponent
+                onLoaded: { item.textRole = "text"; item.model = [{text: "Choose an action"}, {text: "Open item"}, {text: "Copy link"}, {text: "Move to folder"}, {text: "Archive item"}, {text: "View details"}, {text: "Share item"}, {text: "Export item"}]; item.currentIndex = 0; item.popup.height = 144; item.activated.connect(function() { gallery.activationCount++ }) }
+            }
+            Loader { id: disabledSelectionBox; sourceComponent: runixComboBoxComponent; onLoaded: { item.textRole = "text"; item.model = [{text: "Unavailable choice"}]; item.enabled = false } }
+        }
+        Loader {
+            id: actionMenuButton
+            sourceComponent: runixButtonComponent
+            onLoaded: {
+                item.text = "Open action menu"
+                item.clicked.connect(function() {
+                    item.forceActiveFocus(Qt.TabFocusReason)
+                    actionMenu.item.x = item.mapToItem(gallery, 0, 0).x
+                    actionMenu.item.y = item.mapToItem(gallery, 0, item.height).y
+                    actionMenu.item.open()
+                })
+            }
+        }
+        Loader {
+            id: actionMenu
+            sourceComponent: runixMenuComponent
+            onLoaded: {
+                item.parent = gallery
+                item.width = 240
+                for (const properties of [
+                    {text: "Open"}, {text: "Mark as read", checkable: true, checked: true},
+                    {text: "Unavailable", enabled: false}, {text: "Delete", destructive: true}
+                ]) {
+                    const row = runixMenuItemComponent.createObject(item.contentItem, properties)
+                    row.triggered.connect(function() { gallery.activationCount++ })
+                    item.addItem(row)
+                }
+            }
+        }
+        Label { text: "Dialog, popover, and tooltip"; font.bold: true }
+        RowLayout {
+            Loader {
+                id: dialogButton
+                sourceComponent: runixButtonComponent
+                onLoaded: {
+                    item.text = "Show dialog"
+                    item.clicked.connect(function() { item.forceActiveFocus(Qt.TabFocusReason); dialogPopup.item.open() })
+                }
+            }
+            Loader {
+                id: popoverButton
+                sourceComponent: runixButtonComponent
+                onLoaded: {
+                    item.text = "Show popover"
+                    item.clicked.connect(function() { item.forceActiveFocus(Qt.TabFocusReason); popoverPopup.item.open() })
+                }
+            }
+            Loader {
+                id: tooltipButton
+                sourceComponent: runixButtonComponent
+                onLoaded: {
+                    item.text = "Tooltip"
+                    item.clicked.connect(function() { item.forceActiveFocus(Qt.TabFocusReason) })
+                    tooltipPopup.item = runixToolTipComponent.createObject(item, {
+                        parent: item, text: "The same themed hint for pointer and keyboard focus", delay: 0, timeout: -1
+                    })
+                    tooltipPopup.item.visible = Qt.binding(function() { return item.hovered || item.visualFocus })
+                }
+            }
+        }
+        QtObject { id: tooltipPopup; property var item: null }
+        Loader {
+            id: dialogPopup
+            sourceComponent: runixPopupComponent
+            onLoaded: {
+                item.parent = gallery
+                item.modalScrim = true
+                item.width = 320
+                item.x = Qt.binding(function() { return Math.max(0, (gallery.width - item.width) / 2) })
+                item.y = Qt.binding(function() { return Math.max(0, (gallery.height - item.height) / 2) })
+                item.height = 120
+                item.contentItem = dialogContent.createObject(item)
+            }
+        }
+        Loader {
+            id: popoverPopup
+            sourceComponent: runixPopupComponent
+            onLoaded: {
+                item.parent = gallery
+                item.width = 280
+                item.x = Qt.binding(function() { return Math.max(0, (gallery.width - item.width) / 2) })
+                item.y = Qt.binding(function() { return Math.max(0, (gallery.height - item.height) / 2) })
+                item.height = 100
+                item.contentItem = popoverContent.createObject(item)
+            }
+        }
+        Component {
+            id: dialogContent
+            Column {
+                spacing: 8
+                Text { text: "Dialog specimen"; textFormat: Text.PlainText; color: activeAppearance.foregrounds.primary }
+                Text {
+                    width: 296
+                    wrapMode: Text.Wrap
+                    textFormat: Text.PlainText
+                    text: "A themed modal surface with focus restoration."
+                    color: activeAppearance.foregrounds.secondary
+                }
+                Loader { sourceComponent: runixButtonComponent; onLoaded: { item.text = "Close"; item.clicked.connect(function() { dialogPopup.item.close() }) } }
+            }
+        }
+        Component {
+            id: popoverContent
+            Column {
+                spacing: 8
+                Text { text: "Popover specimen"; color: activeAppearance.foregrounds.primary }
+                Text { text: "A non-modal B1 surface."; color: activeAppearance.foregrounds.secondary }
+                Loader { sourceComponent: runixButtonComponent; onLoaded: { item.text = "Close"; item.clicked.connect(function() { popoverPopup.item.close() }) } }
+            }
+        }
+        Label { text: "Shortcut and supporting specimens"; font.bold: true }
+        GridLayout {
+            columns: 2
+            Loader { id: keycapSample; sourceComponent: runixSupportingComponent; onLoaded: { item.kind = "keycap"; item.text = "Ctrl" } }
+            Loader { id: recorderSample; sourceComponent: runixSupportingComponent; onLoaded: { item.kind = "recorder"; item.text = "Record shortcut" } }
+            Loader { id: tagSample; sourceComponent: runixSupportingComponent; onLoaded: { item.kind = "tag"; item.text = "Featured"; item.hue = "purple" } }
+            Loader { id: sectionSample; sourceComponent: runixSupportingComponent; onLoaded: { item.kind = "section"; item.text = "Recent items"; item.detail = "6" } }
+            Loader { id: statusSample; sourceComponent: runixSupportingComponent; onLoaded: { item.kind = "status"; item.text = "Connected"; item.hue = "green" } }
+            Loader { id: iconSample; sourceComponent: runixSupportingComponent; onLoaded: { item.kind = "glyph"; item.text = "◆"; item.detail = "Monochrome UI glyph" } }
+            Loader { id: emptySample; sourceComponent: runixSupportingComponent; onLoaded: { item.kind = "empty"; item.text = "Nothing here yet"; item.detail = "Items will appear when available." } }
+            Loader { id: loadingSample; sourceComponent: runixSupportingComponent; onLoaded: { item.kind = "loading"; item.text = "Loading items"; item.detail = "Please wait" } }
+            Loader { sourceComponent: runixSupportingComponent; onLoaded: { item.kind = "status"; item.text = "Warning"; item.detail = "Review this value"; item.hue = "yellow" } }
+            Loader { sourceComponent: runixSupportingComponent; onLoaded: { item.kind = "status"; item.text = "Error"; item.detail = "The sample action failed"; item.hue = "red" } }
+            Loader { sourceComponent: runixSupportingComponent; onLoaded: { item.kind = "status"; item.text = "Information"; item.detail = "No action is needed"; item.hue = "blue" } }
+        }
         Label { text: "Control and sampled contrast inspection"; font.bold: true }
         ComboBox {
             id: controlPicker
@@ -278,7 +430,21 @@ ScrollView {
             ["gallery-switch-disabled", disabledSwitch, "switch", "Disabled on", false],
             ["gallery-switch-disabled-off", disabledOffSwitch, "switch", "Disabled off", false],
             ["gallery-slider", slider, "slider", "Slider", false],
-            ["gallery-slider-disabled", disabledSlider, "slider", "Disabled slider", false]
+            ["gallery-slider-disabled", disabledSlider, "slider", "Disabled slider", false],
+            ["gallery-selection", selectionBox, "combobox", "Selection", false],
+            ["gallery-selection-disabled", disabledSelectionBox, "combobox", "Disabled selection", false],
+            ["gallery-menu", actionMenuButton, "button", "Action menu", false],
+            ["gallery-dialog", dialogButton, "button", "Dialog", false],
+            ["gallery-popover", popoverButton, "button", "Popover", false],
+            ["gallery-tooltip", tooltipButton, "button", "Tooltip", false],
+            ["gallery-keycap", keycapSample, "status", "Shortcut keycap", false],
+            ["gallery-recorder", recorderSample, "status", "Shortcut recorder", false],
+            ["gallery-tag", tagSample, "status", "Tag", false],
+            ["gallery-section", sectionSample, "status", "Section header", false],
+            ["gallery-status", statusSample, "status", "Status", false],
+            ["gallery-icon-sample", iconSample, "status", "Monochrome icon", false],
+            ["gallery-empty", emptySample, "status", "Empty state", false],
+            ["gallery-loading", loadingSample, "status", "Loading state", false]
         ]
         const registered = ({})
         for (const entry of entries) {
@@ -287,13 +453,15 @@ ScrollView {
             if (typeof semanticDebug === "undefined") continue
             const button = ["button", "checkbox", "radio", "switch"].indexOf(entry[2]) >= 0
             const actions = button ? ["focus", "activate", "key"] : entry[2] === "slider" ? ["focus", "key"]
+                : entry[2] === "combobox" ? ["focus", "select", "key"]
+                : control.kind === "recorder" ? ["focus", "key"] : entry[2] === "status" ? []
                 : control.readOnly ? ["focus", "select", "key"] : ["focus", "replace", "select", "key"]
             semanticDebug.registerControl(entry[0], control, entry[2], entry[3], actions,
                 button ? function() { control.click() } : null, entry[4])
             semanticDebug.controls[entry[0]].inspect = function() { return gallery.inspect(control) }
         }
         const focusOrder = entries.map(function(entry) { return entry[1].item })
-            .filter(function(control) { return control.enabled })
+            .filter(function(control) { return control.enabled && (control.activeFocusOnTab || control.kind === "recorder") })
         focusOrder.push(controlPicker, rolePicker)
         for (let i = 0; i < focusOrder.length; ++i) {
             const control = focusOrder[i]
@@ -304,6 +472,11 @@ ScrollView {
         controls = registered
         if (typeof semanticDebug === "undefined") return
         semanticDebug.registerControl("gallery-scroll", gallery, "scroll", "Gallery specimens", ["scroll"], null, false)
+        const bar = gallery.ScrollBar.vertical
+        semanticDebug.registerControl("gallery-scrollbar", bar, "scrollbar", "Gallery scrollbar", [], null, false)
+        semanticDebug.controls["gallery-scrollbar"].inspect = function() {
+            return {position: bar.position, size: bar.size, hovered: bar.hovered, pressed: bar.pressed}
+        }
         semanticDebug.controls["gallery-scroll"].scroll = function(id) {
             if (id === "gallery-inspection") { gallery.reveal(inspection); return true }
             if (!Object.prototype.hasOwnProperty.call(gallery.controls, id)) return false

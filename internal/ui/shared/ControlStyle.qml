@@ -6,6 +6,7 @@ QtObject {
     readonly property color placeholder: activeAppearance.foregrounds.placeholder
     readonly property color disabled: activeAppearance.foregrounds.disabled
     readonly property color focus: activeAppearance.foregrounds.focus
+    readonly property color selectionMarker: activeAppearance.foregrounds["selection-marker"]
     readonly property color error: activeAppearance.foregrounds["red-text"]
     readonly property color icon: activeAppearance.foregrounds["monochrome-icon"]
     readonly property color errorIcon: activeAppearance.foregrounds["red-icon"]
@@ -24,10 +25,26 @@ QtObject {
     readonly property color disabledBorder: activeAppearance.surfaces.disabled_border
     readonly property color button: activeAppearance.surfaces.button
     readonly property color selectedFill: activeAppearance.surfaces.checked
+    readonly property color selectedRow: activeAppearance.surfaces.selected
     readonly property color track: activeAppearance.surfaces.track
     readonly property color disabledTrack: activeAppearance.surfaces.disabled_track
     readonly property color hover: activeAppearance.surfaces.hover
     readonly property color press: activeAppearance.surfaces.press
+    readonly property color scrim: activeAppearance.surfaces.scrim
+    readonly property color popup: activeAppearance.surfaces.b1
+    readonly property color popupBorder: activeAppearance.surfaces.border
+    readonly property color scrollThumb: activeAppearance.surfaces.scrollbar
+    readonly property color scrollHover: activeAppearance.surfaces.scrollbar_hover
+    readonly property color scrollPressed: activeAppearance.surfaces.scrollbar_pressed
+    function hueIndex(hue) {
+        const names = ["red", "orange", "yellow", "green", "blue", "purple", "magenta"]
+        const index = names.indexOf(hue)
+        return index < 0 ? 4 : index
+    }
+    function hueText(hue) { return activeAppearance.foregrounds[hue + "-text"] || text }
+    function hueIcon(hue) { return activeAppearance.foregrounds[hue + "-icon"] || icon }
+    function tagFill(hue) { return activeAppearance.surfaces["tag_" + hueIndex(hue)] || button }
+
     readonly property int radius: 5
     readonly property int spacing: 8
 

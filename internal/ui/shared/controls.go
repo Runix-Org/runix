@@ -22,6 +22,13 @@ func Install(engine *qml.QQmlApplicationEngine) error {
 		{"RadioButton", "runixRadioButtonComponent"},
 		{"Switch", "runixSwitchComponent"},
 		{"Slider", "runixSliderComponent"},
+		{"ComboBox", "runixComboBoxComponent"},
+		{"Menu", "runixMenuComponent"},
+		{"MenuItem", "runixMenuItemComponent"},
+		{"Popup", "runixPopupComponent"},
+		{"ToolTip", "runixToolTipComponent"},
+		{"ScrollBar", "runixScrollBarComponent"},
+		{"Supporting", "runixSupportingComponent"},
 	}
 	for _, resource := range resources {
 		document, err := controls.ReadFile(resource.name + ".qml")
