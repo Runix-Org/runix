@@ -13,6 +13,9 @@ import (
 //go:embed Main.qml
 var document []byte
 
+//go:embed ControlsGallery.qml
+var controlsGallery []byte
+
 type command struct {
 	HyprlandWindow   bool     `help:"Use Hyprland IPC to control window size, position and focus."`
 	DebugSocket      string   `help:"Enable the development debug socket at this private path." placeholder:"PATH"`
@@ -48,6 +51,7 @@ func (command *command) Run() error {
 		IconThemePaths:   []string{iconDirectory},
 		IconThemes:       []string{"runix-a", "runix-b"},
 		DetailContent:    detailFixture,
+		ControlsGallery:  controlsGallery,
 		DetailLink:       func(url string) { fmt.Printf("Allowed detail link: %s\n", url) },
 	}
 	index := search.NewIndex(searchFixture(iconRefs), search.DefaultPolicy())

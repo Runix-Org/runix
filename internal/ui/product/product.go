@@ -22,6 +22,7 @@ import (
 	"runix/internal/ui/icons"
 	"runix/internal/ui/launcher"
 	"runix/internal/ui/searchview"
+	"runix/internal/ui/shared"
 	"runix/internal/ui/windowpolicy"
 	"runix/internal/usage"
 )
@@ -56,6 +57,10 @@ func Run(args []string, options Options) error {
 		return appearanceErr
 	}
 	defer appearance.Delete()
+	if controlsErr := shared.Install(engine); controlsErr != nil {
+		engine.Delete()
+		return controlsErr
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	var catalog atomic.Pointer[launchable.Catalog]
 	var deliveryMu sync.Mutex

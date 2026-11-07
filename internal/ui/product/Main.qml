@@ -139,7 +139,13 @@ ApplicationWindow {
                     } else window.openIntegration()
                 }
             }
-            Button { text: "Quit"; onClicked: Qt.quit() }
+            Loader {
+                sourceComponent: runixButtonComponent
+                onLoaded: {
+                    item.text = "Quit"
+                    item.clicked.connect(function() { Qt.quit() })
+                }
+            }
         }
         Label {
             Layout.fillWidth: true

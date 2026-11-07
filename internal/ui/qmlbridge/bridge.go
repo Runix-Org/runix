@@ -17,6 +17,7 @@ import (
 	"runix/internal/ui/launcher"
 	"runix/internal/ui/searchview"
 	"runix/internal/ui/semanticdebug"
+	"runix/internal/ui/shared"
 	"runix/internal/ui/tableview"
 	"runix/internal/ui/tray"
 	"runix/internal/ui/windowpolicy"
@@ -38,6 +39,7 @@ type Options struct {
 	IconThemes       []string
 	DetailContent    func(string) (string, string)
 	DetailLink       func(string)
+	ControlsGallery  []byte
 }
 
 // Run owns the GUI thread until explicit quit. Call once from main.
@@ -67,6 +69,10 @@ func Run(
 		return appearanceErr
 	}
 	defer appearance.Delete()
+	if controlsErr := shared.Install(engine); controlsErr != nil {
+		engine.Delete()
+		return controlsErr
+	}
 	source := icons.New(options.IconThemePaths, options.IconThemes)
 	var activate func(string, uint64)
 	if options.Activate != nil {
@@ -143,6 +149,17 @@ func Run(
 			return err
 		}
 		stopDebug = debug.Stop
+	}
+	if len(options.ControlsGallery) > 0 {
+		gallery := qml.NewQQmlComponent2(engine.QQmlEngine)
+		gallery.SetParent(engine.QObject)
+		galleryURL := qt.NewQUrl3("qrc:/runix/ui-lab/ControlsGallery.qml")
+		gallery.SetData(options.ControlsGallery, galleryURL)
+		galleryURL.Delete()
+		if !gallery.IsReady() {
+			return fmt.Errorf("load controls gallery: %s", gallery.ErrorString())
+		}
+		engine.RootContext().SetContextProperty("controlsGalleryComponent", gallery.QObject)
 	}
 	url := qt.NewQUrl3("qrc:/runix/ui-lab/Main.qml")
 	defer url.Delete()

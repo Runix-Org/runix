@@ -154,7 +154,20 @@ ApplicationWindow {
                 }
                 semanticDebug.registerControl("appearance-status", appearanceStatus, "status", "Active appearance", [], null, false)
                 semanticDebug.controls["appearance-status"].inspect = function() {
-                    return activeAppearance.snapshot
+                    const state = activeAppearance.snapshot
+                    return {
+                        preferences: state.preferences, active_id: state.active_id, name: state.name,
+                        appearance: state.appearance, scheme: state.scheme,
+                        fallback_reason: state.fallback_reason, error: state.error,
+                        roles: {
+                            original: state.roles.original, improve_contrast: state.roles.improve_contrast,
+                            surfaces: state.roles.surfaces,
+                            foregrounds: state.roles.foregrounds.map(function(role) {
+                                return {name: role.name, original: role.original,
+                                    effective: role.effective, diagnostic: role.diagnostic}
+                            })
+                        }
+                    }
                 }
             }
         }
@@ -195,14 +208,46 @@ ApplicationWindow {
                     }
                 }
             }
+            Button {
+                id: galleryMode
+                text: "Controls"
+                checkable: true
+                checked: false
+                autoExclusive: true
+                onClicked: {
+                    checked = true
+                    if (controlsGallery.item && controlsGallery.item.firstInput) {
+                        launcher.query = controlsGallery.item.firstInput
+                        launcher.query.forceActiveFocus(Qt.TabFocusReason)
+                    }
+                }
+            }
             Component.onCompleted: {
                 if (typeof semanticDebug === "undefined") return
-                semanticDebug.registerControl("search-mode", searchMode, "button", "Search mode",
-                    ["activate"], function() { searchMode.clicked() }, false)
-                semanticDebug.registerControl("table-mode", tableMode, "button", "Table mode",
-                    ["activate"], function() { tableMode.clicked() }, false)
-                semanticDebug.registerControl("form-mode", formMode, "button", "Form mode",
-                    ["activate"], function() { formMode.clicked() }, false)
+                semanticDebug.registerControl("search-mode", searchMode, "button", "Search mode", ["activate"], function() { searchMode.checked = true; searchMode.clicked() }, false)
+                semanticDebug.registerControl("table-mode", tableMode, "button", "Table mode", ["activate"], function() { tableMode.checked = true; tableMode.clicked() }, false)
+                semanticDebug.registerControl("form-mode", formMode, "button", "Form mode", ["activate"], function() { formMode.checked = true; formMode.clicked() }, false)
+                semanticDebug.registerControl("gallery-mode", galleryMode, "button", "Controls gallery", ["activate"], function() { galleryMode.checked = true; galleryMode.clicked() }, false)
+            }
+        }
+        Loader {
+            id: controlsGallery
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            visible: galleryMode.checked
+            active: true
+            sourceComponent: controlsGalleryComponent
+            onLoaded: {
+                if (galleryMode.checked && item.firstInput) {
+                    launcher.query = item.firstInput
+                    launcher.query.forceActiveFocus(Qt.TabFocusReason)
+                }
+            }
+        }
+        Connections {
+            target: window
+            function onVisibleChanged() {
+                if (!window.visible && controlsGallery.item) controlsGallery.item.clearPassword()
             }
         }
         Repeater {
@@ -210,7 +255,7 @@ ApplicationWindow {
             delegate: ColumnLayout {
                 id: screen
                 Layout.fillWidth: true
-                visible: !formMode.checked
+                visible: !formMode.checked && !galleryMode.checked
                 Layout.fillHeight: true
                 readonly property var info: JSON.parse(model.snapshot)
                 function submit() { model.command = JSON.stringify({op: "query", text: query.text}) }
