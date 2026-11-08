@@ -6,15 +6,44 @@ ApplicationWindow {
     id: window
     property var formItem: null
     property var searchInput: null
-    readonly property var labTheme: themeLoader.item
-    Loader { id: themeLoader; sourceComponent: labThemeComponent }
+    // Hosts keep native controls as the focus/editing and debug targets.
+    component Action: Loader {
+        id: host
+        property string text: ""
+        property bool checkable: false
+        property bool checked: false
+        property bool autoExclusive: false
+        property bool destructive: false
+        signal clicked()
+        sourceComponent: runixButtonComponent
+        onLoaded: {
+            item.text = Qt.binding(function() { return host.text })
+            item.checkable = Qt.binding(function() { return host.checkable })
+            item.checked = Qt.binding(function() { return host.checked })
+            item.destructive = Qt.binding(function() { return host.destructive })
+            if (autoExclusive) navigation.addButton(item)
+            item.checkedChanged.connect(function() { host.checked = item.checked })
+            item.clicked.connect(host.clicked)
+        }
+    }
+    ButtonGroup { id: navigation }
+    function registerControl(id, control, role, label, actions, activate, secret) {
+        semanticDebug.registerControl(id, control instanceof Loader ? control.item : control,
+            role, label, actions, activate, secret)
+    }
+    readonly property var appearanceMode: appearanceModeLoader.item
+    readonly property var improveContrast: improveContrastLoader.item
+    readonly property var lightTheme: lightThemeLoader.item
+    readonly property var darkTheme: darkThemeLoader.item
+    readonly property var passwordFixture: passwordFixtureLoader.item
+    readonly property var geometry: geometryLoader.item
     palette.window: activeAppearance.surfaces.b0
     palette.windowText: activeAppearance.foregrounds.primary
-    palette.text: palette.windowText
-    palette.buttonText: palette.windowText
+    palette.text: activeAppearance.foregrounds.primary
+    palette.buttonText: activeAppearance.foregrounds.primary
     palette.placeholderText: activeAppearance.foregrounds.placeholder
     palette.base: activeAppearance.surfaces.b1
-    palette.button: palette.window
+    palette.button: activeAppearance.surfaces.b0
     palette.highlight: activeAppearance.surfaces.selection
     palette.highlightedText: activeAppearance.foregrounds["selected-text"]
     background: Rectangle {
@@ -37,6 +66,11 @@ ApplicationWindow {
         if (typeof semanticDebug !== "undefined") {
             semanticDebug.window = window
             semanticDebug.dismiss = function() { window.requestVisibility("hide") }
+            window.registerControl("quit", quit, "button", "Quit",
+                ["focus", "activate", "key"], function() { quit.clicked() }, false)
+            window.registerControl("password-fixture", passwordFixture, "password", "Password fixture", [], null, true)
+            window.registerControl("disabled-fixture", disabledFixture, "button", "Disabled fixture",
+                ["activate"], function() { disabledFixture.clicked() }, false)
         }
     }
     function requestVisibility(command) {
@@ -53,8 +87,8 @@ ApplicationWindow {
 
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: window.labTheme.spacing * 2
-        spacing: window.labTheme.spacing
+        anchors.margins: runixControlStyle.spacing * 2
+        spacing: runixControlStyle.spacing
         RowLayout {
             Label {
                 Layout.fillWidth: true
@@ -64,14 +98,15 @@ ApplicationWindow {
                 font.pixelSize: 20
                 MouseArea { anchors.fill: parent; onPressed: windowPolicy.startMove() }
             }
-            Button { text: "Window"; onClicked: geometry.open() }
-            Button {
+            Action { text: "Window"; onClicked: geometry.open() }
+            Action {
                 id: quit
                 text: "Quit"
                 onClicked: Qt.quit()
             }
         }
         ColumnLayout {
+            id: appearanceControls
             Layout.fillWidth: true
             function save(key, value) {
                 const next = Object.assign({}, activeAppearance.preferences)
@@ -81,42 +116,66 @@ ApplicationWindow {
             RowLayout {
                 Layout.fillWidth: true
                 Label { text: "Appearance (development)" }
-                ComboBox {
-                    id: appearanceMode
-                    model: ["System", "Light", "Dark"]
-                    currentIndex: ["system", "light", "dark"].indexOf(activeAppearance.preferences.mode)
-                    onActivated: function(index) { parent.parent.save("mode", ["system", "light", "dark"][index]) }
+                Loader {
+                    id: appearanceModeLoader
+                    sourceComponent: runixComboBoxComponent
+                    onLoaded: {
+                        item.model = ["System", "Light", "Dark"]
+                        item.currentIndex = Qt.binding(function() {
+                            return ["system", "light", "dark"].indexOf(activeAppearance.preferences.mode)
+                        })
+                        item.activated.connect(function(index) {
+                            appearanceControls.save("mode", ["system", "light", "dark"][index])
+                        })
+                    }
                 }
-                CheckBox {
-                    id: improveContrast
-                    text: "Improve contrast"
-                    checked: activeAppearance.preferences.improve_contrast
-                    onClicked: parent.parent.save("improve_contrast", checked)
+                Loader {
+                    id: improveContrastLoader
+                    sourceComponent: runixCheckBoxComponent
+                    onLoaded: {
+                        item.text = "Improve contrast"
+                        item.checked = Qt.binding(function() { return activeAppearance.preferences.improve_contrast })
+                        item.clicked.connect(function() { appearanceControls.save("improve_contrast", item.checked) })
+                    }
                 }
             }
             RowLayout {
                 Layout.fillWidth: true
                 Label { text: "Light" }
-                ComboBox {
-                    id: lightTheme
+                Loader {
+                    id: lightThemeLoader
                     Layout.fillWidth: true
-                    model: activeAppearance.lightThemes
-                    textRole: "name"
-                    currentIndex: model.findIndex(function(entry) {
-                        return entry.id === activeAppearance.preferences.light_id
-                    })
-                    onActivated: function(index) { parent.parent.save("light_id", model[index].id) }
+                    sourceComponent: runixComboBoxComponent
+                    onLoaded: {
+                        item.model = Qt.binding(function() { return activeAppearance.lightThemes })
+                        item.textRole = "name"
+                        item.currentIndex = Qt.binding(function() {
+                            return item.model.findIndex(function(entry) {
+                                return entry.id === activeAppearance.preferences.light_id
+                            })
+                        })
+                        item.activated.connect(function(index) {
+                            appearanceControls.save("light_id", item.model[index].id)
+                        })
+                    }
                 }
                 Label { text: "Dark" }
-                ComboBox {
-                    id: darkTheme
+                Loader {
+                    id: darkThemeLoader
                     Layout.fillWidth: true
-                    model: activeAppearance.darkThemes
-                    textRole: "name"
-                    currentIndex: model.findIndex(function(entry) {
-                        return entry.id === activeAppearance.preferences.dark_id
-                    })
-                    onActivated: function(index) { parent.parent.save("dark_id", model[index].id) }
+                    sourceComponent: runixComboBoxComponent
+                    onLoaded: {
+                        item.model = Qt.binding(function() { return activeAppearance.darkThemes })
+                        item.textRole = "name"
+                        item.currentIndex = Qt.binding(function() {
+                            return item.model.findIndex(function(entry) {
+                                return entry.id === activeAppearance.preferences.dark_id
+                            })
+                        })
+                        item.activated.connect(function(index) {
+                            appearanceControls.save("dark_id", item.model[index].id)
+                        })
+                    }
                 }
             }
             Label {
@@ -131,7 +190,7 @@ ApplicationWindow {
             }
             Component.onCompleted: {
                 if (typeof semanticDebug === "undefined") return
-                semanticDebug.registerControl("appearance-mode", appearanceMode, "combobox", "Appearance mode",
+                window.registerControl("appearance-mode", appearanceMode, "combobox", "Appearance mode",
                     ["focus", "select"], null, false)
                 semanticDebug.controls["appearance-mode"].select = function(text) {
                     const index = ["system", "light", "dark"].indexOf(text)
@@ -139,11 +198,11 @@ ApplicationWindow {
                     appearanceMode.activated(index)
                     return true
                 }
-                semanticDebug.registerControl("appearance-contrast", improveContrast, "checkbox", "Improve contrast",
+                window.registerControl("appearance-contrast", improveContrast, "checkbox", "Improve contrast",
                     ["focus", "activate"], function() { improveContrast.toggle(); improveContrast.clicked() }, false)
                 for (const pair of [["appearance-light", lightTheme], ["appearance-dark", darkTheme]]) {
                     const control = pair[1]
-                    semanticDebug.registerControl(pair[0], control, "combobox", pair[0], ["focus", "select"], null, false)
+                    window.registerControl(pair[0], control, "combobox", pair[0], ["focus", "select"], null, false)
                     semanticDebug.controls[pair[0]].select = function(text) {
                         const index = control.model.findIndex(function(entry) { return entry.id === text })
                         if (index < 0) return false
@@ -152,7 +211,7 @@ ApplicationWindow {
                         return true
                     }
                 }
-                semanticDebug.registerControl("appearance-status", appearanceStatus, "status", "Active appearance", [], null, false)
+                window.registerControl("appearance-status", appearanceStatus, "status", "Active appearance", [], null, false)
                 semanticDebug.controls["appearance-status"].inspect = function() {
                     const state = activeAppearance.snapshot
                     return {
@@ -172,7 +231,7 @@ ApplicationWindow {
             }
         }
         RowLayout {
-            Button {
+            Action {
                 id: searchMode
                 text: "Search"
                 checkable: true
@@ -184,7 +243,7 @@ ApplicationWindow {
                     if (launcher.query) launcher.query.forceActiveFocus(Qt.TabFocusReason)
                 }
             }
-            Button {
+            Action {
                 id: tableMode
                 text: "Table"
                 checkable: true
@@ -192,7 +251,7 @@ ApplicationWindow {
                 autoExclusive: true
                 onClicked: checked = true
             }
-            Button {
+            Action {
                 id: formMode
                 text: "Form"
                 checkable: true
@@ -208,7 +267,7 @@ ApplicationWindow {
                     }
                 }
             }
-            Button {
+            Action {
                 id: galleryMode
                 text: "Controls"
                 checkable: true
@@ -224,10 +283,10 @@ ApplicationWindow {
             }
             Component.onCompleted: {
                 if (typeof semanticDebug === "undefined") return
-                semanticDebug.registerControl("search-mode", searchMode, "button", "Search mode", ["activate"], function() { searchMode.checked = true; searchMode.clicked() }, false)
-                semanticDebug.registerControl("table-mode", tableMode, "button", "Table mode", ["activate"], function() { tableMode.checked = true; tableMode.clicked() }, false)
-                semanticDebug.registerControl("form-mode", formMode, "button", "Form mode", ["activate"], function() { formMode.checked = true; formMode.clicked() }, false)
-                semanticDebug.registerControl("gallery-mode", galleryMode, "button", "Controls gallery", ["activate"], function() { galleryMode.checked = true; galleryMode.clicked() }, false)
+                window.registerControl("search-mode", searchMode, "button", "Search mode", ["activate"], function() { searchMode.checked = true; searchMode.clicked() }, false)
+                window.registerControl("table-mode", tableMode, "button", "Table mode", ["activate"], function() { tableMode.checked = true; tableMode.clicked() }, false)
+                window.registerControl("form-mode", formMode, "button", "Form mode", ["activate"], function() { formMode.checked = true; formMode.clicked() }, false)
+                window.registerControl("gallery-mode", galleryMode, "button", "Controls gallery", ["activate"], function() { galleryMode.checked = true; galleryMode.clicked() }, false)
             }
         }
         Loader {
@@ -258,23 +317,19 @@ ApplicationWindow {
                 visible: !formMode.checked && !galleryMode.checked
                 Layout.fillHeight: true
                 readonly property var info: JSON.parse(model.snapshot)
+                readonly property var query: queryLoader.item
+                readonly property var iconSize: iconSizeLoader.item
                 function submit() { model.command = JSON.stringify({op: "query", text: query.text}) }
                 Component.onCompleted: {
                     launcher.query = query
                     window.searchInput = query
                     if (typeof semanticDebug === "undefined") return
-                    semanticDebug.registerControl("query", query, "textbox", "Query",
+                    window.registerControl("query", query, "textbox", "Query",
                         ["focus", "replace", "select", "key"], null, false)
-                    semanticDebug.registerControl("status", status, "status", "Search status", [], null, false)
-                    semanticDebug.registerControl("run-query", runQuery, "button", "Run query",
+                    window.registerControl("status", status, "status", "Search status", [], null, false)
+                    window.registerControl("run-query", runQuery, "button", "Run query",
                         ["focus", "activate", "key"], function() { runQuery.clicked() }, false)
-                    semanticDebug.registerControl("quit", quit, "button", "Quit",
-                        ["focus", "activate", "key"], function() { quit.clicked() }, false)
-                    semanticDebug.registerControl("password-fixture", passwordFixture, "password", "Password fixture",
-                        [], null, true)
-                    semanticDebug.registerControl("disabled-fixture", disabledFixture, "button", "Disabled fixture",
-                        ["activate"], function() { disabledFixture.clicked() }, false)
-                    semanticDebug.registerControl("results", results, "list", "Search results",
+                    window.registerControl("results", results, "list", "Search results",
                         ["focus", "select", "scroll", "activate"], function() { results.item.activate() }, false)
                     semanticDebug.controls.results.inspect = function() { return results.item.inspect() }
                     semanticDebug.controls.results.select = function(text) {
@@ -291,61 +346,68 @@ ApplicationWindow {
                 }
                 RowLayout {
                     visible: searchMode.checked
-                    TextField {
-                        id: query
+                    Loader {
+                        id: queryLoader
                         Layout.fillWidth: true
-                        placeholderText: "Search by title, workspace, category or ID"
-                        focus: true
-                        background: Rectangle {
-                            color: window.palette.base
-                            radius: window.labTheme.radius
-                            border.color: query.activeFocus ? window.palette.highlight : window.palette.mid
-                            border.width: query.activeFocus ? 2 : 1
+                        sourceComponent: runixTextFieldComponent
+                        onLoaded: {
+                            item.search = true
+                            item.placeholderText = "Search by title, workspace, category or ID"
+                            item.focus = true
+                            item.textChanged.connect(screen.submit)
+                            item.accepted.connect(function() { results.item.activate() })
                         }
-                        onTextChanged: screen.submit()
-                        onAccepted: results.item.activate()
-                        Keys.onUpPressed: results.item.move(-1)
-                        Keys.onDownPressed: results.item.move(1)
-                        Keys.onPressed: function(event) {
+                    }
+                    Connections {
+                        target: query ? query.Keys : null
+                        function onUpPressed(event) { results.item.move(-1); event.accepted = true }
+                        function onDownPressed(event) { results.item.move(1); event.accepted = true }
+                        function onPressed(event) {
                             if (event.key === Qt.Key_PageDown || event.key === Qt.Key_PageUp) {
                                 results.item.move(event.key === Qt.Key_PageDown ? 5 : -5)
                                 event.accepted = true
                             }
                         }
                     }
-                    Button { id: runQuery; text: "Search"; onClicked: screen.submit() }
+                    Action { id: runQuery; text: "Search"; onClicked: screen.submit() }
                 }
                 RowLayout {
                     visible: searchMode.checked
-                    Button {
+                    Action {
                         id: iconTheme
                         text: "Switch icon theme"
                         onClicked: model.command = JSON.stringify({op: "icons-theme"})
                     }
-                    Button {
+                    Action {
                         id: iconRefresh
                         text: "Refresh icons"
                         onClicked: model.command = JSON.stringify({op: "icons-refresh"})
                     }
-                    ComboBox {
-                        id: iconSize
-                        model: [16, 24, 32, 48]
-                        currentIndex: 2
-                        onActivated: if (results.item) results.item.iconSize = Number(currentText)
+                    Loader {
+                        id: iconSizeLoader
+                        sourceComponent: runixComboBoxComponent
+                        onLoaded: {
+                            item.model = [16, 24, 32, 48]
+                            item.currentIndex = 2
+                            item.activated.connect(function() {
+                                if (results.item) results.item.iconSize = Number(item.currentText)
+                            })
+                        }
                     }
                     Component.onCompleted: {
                         if (typeof semanticDebug === "undefined") return
-                        semanticDebug.registerControl("icon-theme", iconTheme, "button", "Switch icon theme",
+                        window.registerControl("icon-theme", iconTheme, "button", "Switch icon theme",
                             ["activate"], function() { iconTheme.clicked() }, false)
-                        semanticDebug.registerControl("icon-refresh", iconRefresh, "button", "Refresh icons",
+                        window.registerControl("icon-refresh", iconRefresh, "button", "Refresh icons",
                             ["activate"], function() { iconRefresh.clicked() }, false)
-                        semanticDebug.registerControl("icon-size", iconSize, "combobox", "Icon size",
+                        window.registerControl("icon-size", iconSize, "combobox", "Icon size",
                             ["focus", "key"], null, false)
                     }
                 }
                 Label {
                     visible: searchMode.checked
                     id: status
+                    color: runixControlStyle.secondary
                     Layout.fillWidth: true
                     text: screen.info.loading ? "Searching…" : screen.info.count + " results · "
                         + screen.info.latency_ms.toFixed(2) + " ms · Selected ID: " + (screen.info.selected_id || "none")
@@ -361,13 +423,13 @@ ApplicationWindow {
                         Layout.fillHeight: true
                         readonly property var tableInfo: JSON.parse(model.snapshot)
                         RowLayout {
-                            Button { id: updateRecord; text: "Update"; enabled: !!tableScreen.tableInfo.selected_id
+                            Action { id: updateRecord; text: "Update"; enabled: !!tableScreen.tableInfo.selected_id
                                 onClicked: model.command = JSON.stringify({op: "update", id: tableScreen.tableInfo.selected_id}) }
-                            Button { id: deleteRecord; text: "Delete"; enabled: !!tableScreen.tableInfo.selected_id
+                            Action { id: deleteRecord; text: "Delete"; destructive: true; enabled: !!tableScreen.tableInfo.selected_id
                                 onClicked: model.command = JSON.stringify({op: "remove", id: tableScreen.tableInfo.selected_id}) }
-                            Button { id: emptyFixture; text: "Empty"; onClicked: model.command = JSON.stringify({op: "fixture", index: 0}) }
-                            Button { id: singleFixture; text: "Single"; onClicked: model.command = JSON.stringify({op: "fixture", index: 1}) }
-                            Button { id: resetFixture; text: "Reset"; onClicked: model.command = JSON.stringify({op: "fixture", index: 10000}) }
+                            Action { id: emptyFixture; text: "Empty"; onClicked: model.command = JSON.stringify({op: "fixture", index: 0}) }
+                            Action { id: singleFixture; text: "Single"; onClicked: model.command = JSON.stringify({op: "fixture", index: 1}) }
+                            Action { id: resetFixture; text: "Reset"; onClicked: model.command = JSON.stringify({op: "fixture", index: 10000}) }
                         }
                         Label {
                             Layout.fillWidth: true
@@ -394,7 +456,7 @@ ApplicationWindow {
                         }
                         Component.onCompleted: {
                             if (typeof semanticDebug === "undefined") return
-                            semanticDebug.registerControl("table", tableViewLoader, "table", "Records",
+                            window.registerControl("table", tableViewLoader, "table", "Records",
                                 ["focus", "select", "scroll", "activate"],
                                 function() { tableViewLoader.item.activate() }, false)
                             semanticDebug.controls.table.inspect = function() { return tableViewLoader.item.inspect() }
@@ -409,15 +471,15 @@ ApplicationWindow {
                                 tableViewLoader.item.view.positionViewAtRow(index, TableView.Beginning)
                                 return true
                             }
-                            semanticDebug.registerControl("table-update", updateRecord, "button", "Update record",
+                            window.registerControl("table-update", updateRecord, "button", "Update record",
                                 ["activate"], function() { updateRecord.clicked() }, false)
-                            semanticDebug.registerControl("table-delete", deleteRecord, "button", "Delete record",
+                            window.registerControl("table-delete", deleteRecord, "button", "Delete record",
                                 ["activate"], function() { deleteRecord.clicked() }, false)
-                            semanticDebug.registerControl("table-empty", emptyFixture, "button", "Empty table fixture",
+                            window.registerControl("table-empty", emptyFixture, "button", "Empty table fixture",
                                 ["activate"], function() { emptyFixture.clicked() }, false)
-                            semanticDebug.registerControl("table-single", singleFixture, "button", "Single table fixture",
+                            window.registerControl("table-single", singleFixture, "button", "Single table fixture",
                                 ["activate"], function() { singleFixture.clicked() }, false)
-                            semanticDebug.registerControl("table-reset", resetFixture, "button", "Reset table fixture",
+                            window.registerControl("table-reset", resetFixture, "button", "Reset table fixture",
                                 ["activate"], function() { resetFixture.clicked() }, false)
                             semanticDebug.controls.table.activate = function() { tableViewLoader.item.activate() }
                         }
@@ -429,6 +491,11 @@ ApplicationWindow {
                     Layout.fillHeight: true
                     Layout.minimumHeight: 54
                     orientation: Qt.Horizontal
+                    handle: Rectangle {
+                        implicitWidth: 6
+                        color: SplitHandle.pressed ? runixControlStyle.press
+                            : SplitHandle.hovered ? runixControlStyle.hover : runixControlStyle.separator
+                    }
                     Loader {
                         id: results
                         SplitView.preferredWidth: 380
@@ -480,21 +547,36 @@ ApplicationWindow {
         }
         Label {
             Layout.alignment: Qt.AlignRight
+            color: runixControlStyle.secondary
             text: "Resize ↘"
             MouseArea { anchors.fill: parent; onPressed: windowPolicy.startResize() }
         }
     }
-    Popup {
-        id: geometry
-        anchors.centerIn: parent
-        width: Math.min(440, window.width - 32)
-        height: Math.min(420, window.height - 32)
-        modal: true
-        ScrollView {
+    Loader {
+        id: geometryLoader
+        sourceComponent: runixPopupComponent
+        onLoaded: {
+            item.parent = window.contentItem
+            item.anchors.centerIn = window.contentItem
+            item.width = Qt.binding(function() { return Math.min(440, window.width - 32) })
+            item.height = Qt.binding(function() { return Math.min(420, window.height - 32) })
+            item.modalScrim = true
+            geometryContent.parent = item.contentItem
+        }
+    }
+    ScrollView {
+            id: geometryContent
+            visible: geometry && geometry.opened
             anchors.fill: parent
+            ScrollBar.vertical: runixScrollBarComponent.createObject(null, {policy: ScrollBar.AsNeeded})
+            ScrollBar.horizontal: runixScrollBarComponent.createObject(null, {policy: ScrollBar.AsNeeded})
             contentWidth: availableWidth
+            contentHeight: geometryLayout.implicitHeight + 8
             ColumnLayout {
-                width: parent.width
+                id: geometryLayout
+                x: 4
+                y: 4
+                width: Math.max(0, geometryContent.availableWidth - 8)
                 Label {
                     Layout.fillWidth: true
                     text: "Requested: " + windowPolicy.requestedSize.width + " × " + windowPolicy.requestedSize.height
@@ -514,30 +596,32 @@ ApplicationWindow {
                     textFormat: Text.PlainText
                 }
                 RowLayout {
-                    Button { text: "Compact"; onClicked: windowPolicy.expanded = false }
-                    Button { text: "Expanded"; onClicked: windowPolicy.expanded = true }
+                    Action { text: "Compact"; onClicked: windowPolicy.expanded = false }
+                    Action { text: "Expanded"; onClicked: windowPolicy.expanded = true }
                 }
-                Button {
+                Action {
                     text: "Hide for 1 second"
                     onClicked: { geometry.close(); window.requestVisibility("hide"); showAgain.start() }
                 }
-                TextField {
-                    id: passwordFixture
+                Loader {
+                    id: passwordFixtureLoader
                     Layout.fillWidth: true
                     visible: typeof semanticDebug !== "undefined"
-                    placeholderText: "Password fixture"
-                    text: "SEMANTIC_PASSWORD_SECRET"
-                    echoMode: TextInput.Password
+                    sourceComponent: runixTextFieldComponent
+                    onLoaded: {
+                        item.placeholderText = "Password fixture"
+                        item.text = "SEMANTIC_PASSWORD_SECRET"
+                        item.echoMode = TextInput.Password
+                    }
                 }
-                Button {
+                Action {
                     id: disabledFixture
                     text: "Disabled action fixture"
                     enabled: false
                     visible: typeof semanticDebug !== "undefined"
                 }
-                Button { text: "Close"; onClicked: geometry.close() }
+                Action { text: "Close"; onClicked: geometry.close() }
             }
-        }
     }
     Repeater {
         model: windowCommands

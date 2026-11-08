@@ -14,7 +14,6 @@ import (
 	"github.com/mappu/miqt/qt6/mainthread"
 	"github.com/mappu/miqt/qt6/qml"
 	"runix/internal/form"
-	"runix/internal/ui/shared"
 )
 
 //go:embed FormView.qml
@@ -45,16 +44,7 @@ func Install(engine *qml.QQmlApplicationEngine) (*Adapter, error) {
 	if !component.IsReady() {
 		return nil, fmt.Errorf("load form view: %s", component.ErrorString())
 	}
-	themeComponent := qml.NewQQmlComponent2(engine.QQmlEngine)
-	themeComponent.SetParent(engine.QObject)
-	themeURL := qt.NewQUrl3("qrc:/runix/shared/Theme.qml")
-	defer themeURL.Delete()
-	themeComponent.SetData(shared.Theme, themeURL)
-	if !themeComponent.IsReady() {
-		return nil, fmt.Errorf("load shared theme: %s", themeComponent.ErrorString())
-	}
 	a := &Adapter{state: qt.NewQAbstractListModel(), root: qt.NewQModelIndex(), form: form.New()}
-	engine.RootContext().SetContextProperty("labThemeComponent", themeComponent.QObject)
 	a.state.OnRowCount(func(parent *qt.QModelIndex) int {
 		if parent.IsValid() {
 			return 0

@@ -11,20 +11,32 @@ ColumnLayout {
     readonly property var info: state && state.snapshot
         ? JSON.parse(state.snapshot)
         : ({id: "", format: "", html: "", link_status: "", last_link: ""})
-    readonly property string renderedHTML: info.html || ""
-    readonly property var theme: themeLoader.item
-    Loader { id: themeLoader; sourceComponent: labThemeComponent }
+    readonly property color linkColor: activeAppearance.foregrounds["blue-text"]
+    readonly property string renderedHTML: (info.html || "").replace(/<a href=/g,
+        '<a style="color:' + linkColor + '; text-decoration:underline" href=')
+    property string displayedSource: ""
+    property int renderRevision: 0
     onRenderedHTMLChanged: {
-        // Editing operations avoid stale rich-text rendering after long-document replacement on Qt 6.12.
+        const replacing = displayedSource !== (info.html || "")
+        const start = textArea.selectionStart
+        const end = textArea.selectionEnd
+        const cursor = textArea.cursorPosition
+        const scrollY = scroller.contentY
+        const revision = ++renderRevision
+        // Qt ignores palette.link in rich text. Style only our sanitized anchors, never raw input.
+        // Clear/insert also avoids stale rich text after replacing a scrolled document on Qt 6.12.
         textArea.clear()
         textArea.insert(0, renderedHTML)
-        textArea.cursorPosition = 0
-        Qt.callLater(function() { scroller.contentY = 0 })
+        if (replacing) textArea.cursorPosition = 0
+        else if (cursor === start) textArea.select(end, start)
+        else textArea.select(start, end)
+        displayedSource = info.html || ""
+        Qt.callLater(function() {
+            if (revision === root.renderRevision) scroller.contentY = replacing ? 0 : scrollY
+        })
     }
-
     function requestContent() {
-        if (!state || requestedID === contentID)
-            return
+        if (!state || requestedID === contentID) return
         requestedID = contentID
         state.command = JSON.stringify({op: "content", id: contentID})
     }
@@ -45,15 +57,13 @@ ColumnLayout {
             return true
         }
         const y = Number(value)
-        if (!isFinite(y) || y < 0 || y > Math.max(0, scroller.contentHeight - scroller.height))
-            return false
+        if (!isFinite(y) || y < 0 || y > Math.max(0, scroller.contentHeight - scroller.height)) return false
         scroller.contentY = y
         return true
     }
     function registerDebug() {
         if (!semanticDebug) return
-        semanticDebug.registerControl("detail", textArea, "text", "Detail content",
-                                      ["focus", "select", "scroll"], null, false)
+        semanticDebug.registerControl("detail", textArea, "text", "Detail content", ["focus", "select", "scroll"], null, false)
         semanticDebug.controls["detail"].inspect = inspectDetail
         semanticDebug.controls["detail"].readValue = function() { return textArea.getText(0, 256) }
         semanticDebug.controls["detail"].select = function(value) {
@@ -62,10 +72,8 @@ ColumnLayout {
             return true
         }
         semanticDebug.controls["detail"].scroll = scrollDetail
-        semanticDebug.registerControl("detail-copy", copyButton, "button", "Copy detail",
-                                      ["activate"], copyContent, false)
-        semanticDebug.registerControl("detail-select-all", selectButton, "button", "Select all detail",
-                                      ["activate"], selectAllContent, false)
+        semanticDebug.registerControl("detail-copy", copyButton.item, "button", "Copy detail", ["activate"], copyContent, false)
+        semanticDebug.registerControl("detail-select-all", selectButton.item, "button", "Select all detail", ["activate"], selectAllContent, false)
     }
     onSemanticDebugChanged: registerDebug()
     onStateChanged: { requestedID = null; requestContent() }
@@ -79,13 +87,22 @@ ColumnLayout {
 
     RowLayout {
         Layout.fillWidth: true
-        Button { id: selectButton; text: "Select all"; onClicked: root.selectAllContent() }
-        Button { id: copyButton; text: "Copy"; onClicked: root.copyContent() }
+        Loader {
+            id: selectButton
+            sourceComponent: runixButtonComponent
+            onLoaded: { item.text = "Select all"; item.clicked.connect(root.selectAllContent) }
+        }
+        Loader {
+            id: copyButton
+            sourceComponent: runixButtonComponent
+            onLoaded: { item.text = "Copy"; item.clicked.connect(root.copyContent) }
+        }
         Label {
             Layout.fillWidth: true
             text: root.info.link_status || ""
             textFormat: Text.PlainText
             elide: Text.ElideRight
+            color: runixControlStyle.secondary
         }
     }
     Flickable {
@@ -94,13 +111,13 @@ ColumnLayout {
         Layout.fillHeight: true
         clip: true
         boundsBehavior: Flickable.StopAtBounds
-        ScrollBar.vertical: ScrollBar {}
+        ScrollBar.vertical: runixScrollBarComponent.createObject(null, {policy: ScrollBar.AsNeeded})
         TextArea.flickable: TextArea {
             id: textArea
-            color: root.theme.foreground
-            selectionColor: root.theme.accent
-            selectedTextColor: root.theme.field
-            palette.link: root.theme.accent
+            color: runixControlStyle.text
+            selectionColor: activeAppearance.surfaces.selection
+            selectedTextColor: runixControlStyle.selectedText
+            background: Item {}
             onTextChanged: {
                 cursorPosition = 0
                 deselect()
@@ -113,11 +130,10 @@ ColumnLayout {
             wrapMode: TextEdit.Wrap
             font.family: root.info.format === "code" ? "monospace" : Qt.application.font.family
             onLinkActivated: function(link) {
-                if (root.state)
-                    root.state.command = JSON.stringify({op: "link", url: link})
+                if (root.state) root.state.command = JSON.stringify({op: "link", url: link})
             }
             Keys.onPressed: function(event) {
-                if ((event.key === Qt.Key_C) && (event.modifiers & Qt.ControlModifier)) {
+                if (event.key === Qt.Key_C && (event.modifiers & Qt.ControlModifier)) {
                     root.copyContent()
                     event.accepted = true
                 }

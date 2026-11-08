@@ -36,13 +36,7 @@ func (s *AdapterSuite) TestClearingSelectedResultRemovesOldDetail() {
 		engine.Delete()
 		adapter.Delete()
 	}()
-	theme := qml.NewQQmlComponent2(engine.QQmlEngine)
-	theme.SetParent(engine.QObject)
-	url := qt.NewQUrl3("qrc:/runix/shared/Theme.qml")
-	defer url.Delete()
-	theme.SetData(shared.Theme, url)
-	s.Require().True(theme.IsReady(), theme.ErrorString())
-	engine.RootContext().SetContextProperty("labThemeComponent", theme.QObject)
+	s.Require().NoError(shared.Install(engine))
 	engine.LoadData([]byte(`import QtQuick
 Item {
     width: 500

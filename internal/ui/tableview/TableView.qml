@@ -3,12 +3,36 @@ import QtQuick.Controls
 
 FocusScope {
     id: root
-    SystemPalette { id: colors }
     property var state: null
     readonly property var info: state ? JSON.parse(state.snapshot) : ({count: 0, selected_index: -1, sort_column: 0, descending: false})
     property int delegateCount: 0
     readonly property alias view: table
 
+    readonly property int hoveredRow: rowHover.hovered
+        ? Math.min(table.rows - 1, Math.floor((rowHover.point.position.y + table.contentY) / 36)) : -1
+    property int pressedRow: -1
+    HoverHandler { id: rowHover; parent: table }
+    // Paint each row once across the viewport, including space beyond the last column.
+    Item {
+        anchors.fill: table
+        clip: true
+        Rectangle {
+            width: parent.width
+            height: 36
+            y: root.info.selected_index * 36 - table.contentY
+            visible: root.info.selected_index >= 0
+            color: runixControlStyle.selectedRow
+            Rectangle { width: 2; height: parent.height; color: runixControlStyle.selectionMarker }
+        }
+        Rectangle {
+            width: parent.width
+            height: 36
+            y: (root.pressedRow >= 0 ? root.pressedRow : root.hoveredRow) * 36 - table.contentY
+            visible: (root.pressedRow >= 0 ? root.pressedRow : root.hoveredRow) >= 0
+                && (root.pressedRow >= 0 ? root.pressedRow : root.hoveredRow) !== root.info.selected_index
+            color: root.pressedRow >= 0 ? runixControlStyle.press : runixControlStyle.hover
+        }
+    }
     function command(op, index, column, id) {
         if (state) state.command = JSON.stringify({op: op, index: index || 0, column: column || 0, id: id || ""})
     }
@@ -72,8 +96,42 @@ FocusScope {
             id: headerButton
             required property var model
             required property int index
-            text: model.display + (root.info.sort_column === index ? (root.info.descending ? " ▼" : " ▲") : "")
+            implicitHeight: 36
+            implicitWidth: 100
+            text: model.display
             onClicked: root.sort(index)
+            background: Item {
+                Rectangle { anchors.fill: parent; color: runixControlStyle.wash(headerButton) }
+                Rectangle {
+                    anchors.fill: parent
+                    anchors.margins: 2
+                    color: "transparent"
+                    border.width: headerButton.visualFocus ? 2 : 0
+                    border.color: runixControlStyle.focus
+                    radius: runixControlStyle.radius
+                }
+                Rectangle { anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom; height: 1; color: runixControlStyle.separator }
+            }
+            contentItem: Item {
+                Text {
+                    anchors.left: parent.left
+                    anchors.right: sortGlyph.left
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: headerButton.text
+                    color: root.info.sort_column === headerButton.index
+                        ? runixControlStyle.text : runixControlStyle.secondary
+                    font: headerButton.font
+                    elide: Text.ElideRight
+                }
+                Text {
+                    id: sortGlyph
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 18
+                    text: root.info.sort_column === headerButton.index ? (root.info.descending ? "▼" : "▲") : ""
+                    color: runixControlStyle.selectionMarker
+                }
+            }
             MouseArea {
                 anchors.right: parent.right
                 width: 8
@@ -97,6 +155,11 @@ FocusScope {
                     semanticDebug.registerControl("table-sort-" + index, headerButton, "button", "Sort " + model.display,
                         ["activate"], function() { headerButton.clicked() }, false)
             }
+            Component.onDestruction: {
+                if (typeof semanticDebug !== "undefined"
+                        && semanticDebug.controls["table-sort-" + index]?.item === headerButton)
+                    delete semanticDebug.controls["table-sort-" + index]
+            }
         }
     }
     TableView {
@@ -114,14 +177,15 @@ FocusScope {
         columnSpacing: 0
         reuseItems: true
         boundsBehavior: Flickable.StopAtBounds
-        ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
-        ScrollBar.horizontal: ScrollBar { policy: ScrollBar.AsNeeded }
+        onMovementStarted: root.pressedRow = -1
+        ScrollBar.vertical: runixScrollBarComponent.createObject(null, {policy: ScrollBar.AsNeeded})
+        ScrollBar.horizontal: runixScrollBarComponent.createObject(null, {policy: ScrollBar.AsNeeded})
         columnWidthProvider: function(column) {
             const explicit = table.explicitColumnWidth(column)
             return explicit >= 0 ? explicit : [260, 100, 140, 220][column]
         }
         rowHeightProvider: function(row) { return 36 }
-        delegate: Rectangle {
+        delegate: Item {
             id: cell
             required property int row
             required property int column
@@ -129,10 +193,10 @@ FocusScope {
             required property string recordID
             readonly property string cellText: display
             readonly property string recordKey: recordID
+            readonly property bool hovered: root.hoveredRow === row
+            readonly property bool pressed: root.pressedRow === row
             width: table.columnWidth(column)
             height: 36
-            color: row === root.info.selected_index ? colors.highlight : (row % 2 ? colors.alternateBase : colors.base)
-            border.color: colors.mid
             Text {
                 anchors.fill: parent
                 anchors.leftMargin: 8
@@ -140,11 +204,14 @@ FocusScope {
                 verticalAlignment: Text.AlignVCenter
                 text: cell.cellText
                 textFormat: Text.PlainText
-                color: cell.row === root.info.selected_index ? colors.highlightedText : colors.text
+                color: runixControlStyle.text
                 elide: Text.ElideRight
             }
             MouseArea {
                 anchors.fill: parent
+                onPressed: root.pressedRow = cell.row
+                onReleased: root.pressedRow = -1
+                onCanceled: root.pressedRow = -1
                 onClicked: { root.select(cell.row); table.forceActiveFocus() }
                 onDoubleClicked: root.activate(cell.recordID)
             }
@@ -152,10 +219,10 @@ FocusScope {
             Component.onDestruction: --root.delegateCount
         }
     }
-    Rectangle {
-        anchors.fill: table
-        color: "transparent"
+    Label {
+        anchors.centerIn: table
         visible: table.rows === 0
-        Label { anchors.centerIn: parent; text: "No records" }
+        text: "No records"
+        color: runixControlStyle.secondary
     }
 }

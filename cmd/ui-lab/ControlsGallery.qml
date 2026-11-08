@@ -9,6 +9,8 @@ ScrollView {
     contentWidth: availableWidth
     contentHeight: galleryContent.implicitHeight + 8
     readonly property var firstInput: searchField.item
+    readonly property var controlPicker: controlPickerLoader.item
+    readonly property var rolePicker: rolePickerLoader.item
     property var controls: ({})
     property string selectedID: "gallery-search"
     property string selectedRole: "primary"
@@ -362,19 +364,27 @@ ScrollView {
             Loader { sourceComponent: runixSupportingComponent; onLoaded: { item.kind = "status"; item.text = "Information"; item.detail = "No action is needed"; item.hue = "blue" } }
         }
         Label { text: "Control and sampled contrast inspection"; font.bold: true }
-        ComboBox {
-            id: controlPicker
+        Loader {
+            id: controlPickerLoader
             Layout.fillWidth: true
-            model: Object.keys(gallery.controls)
-            currentIndex: model.indexOf(gallery.selectedID)
-            onActivated: gallery.selectedID = currentText
+            sourceComponent: runixComboBoxComponent
+            onLoaded: {
+                item.model = Qt.binding(function() { return Object.keys(gallery.controls) })
+                item.currentIndex = Qt.binding(function() { return item.model.indexOf(gallery.selectedID) })
+                item.activated.connect(function() { gallery.selectedID = item.currentText })
+            }
         }
-        ComboBox {
-            id: rolePicker
+        Loader {
+            id: rolePickerLoader
             Layout.fillWidth: true
-            model: activeAppearance.diagnostics.map(function(role) { return role.name })
-            currentIndex: model.indexOf(gallery.selectedRole)
-            onActivated: gallery.selectedRole = currentText
+            sourceComponent: runixComboBoxComponent
+            onLoaded: {
+                item.model = Qt.binding(function() {
+                    return activeAppearance.diagnostics.map(function(role) { return role.name })
+                })
+                item.currentIndex = Qt.binding(function() { return item.model.indexOf(gallery.selectedRole) })
+                item.activated.connect(function() { gallery.selectedRole = item.currentText })
+            }
         }
         Label {
             id: inspection
