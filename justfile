@@ -43,6 +43,10 @@ build:
 build-release:
     go build -ldflags="-s -w" .
 
+# Build and replace the user-local executable; Hyprland integration source is embedded.
+install: build-release
+    install -Dm755 runix "$HOME/.config/bin/runix"
+
 # Run the CLI, forwarding arguments.
 run *args:
     go run . {{args}}

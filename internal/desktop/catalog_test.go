@@ -70,6 +70,8 @@ func (s *CatalogSuite) TestWinnersMaskLowerRootsBeforeFiltering() {
 		{"invalid categories", application + "Categories=bad\\q;\n", false},
 		{"invalid", "invalid data", false},
 		{"no display", application + "NoDisplay=true\n", true},
+		{"no display without command", "[Desktop Entry]\nType=Application\nName=Helper\n" +
+			"Name[x-test]=xxHelperxx\nNoDisplay=True\nNoDisplay=true\n", true},
 		{"session", application + "OnlyShowIn=Other;\n", true},
 		{"unsupported", "[Desktop Entry]\nType=Link\n", true},
 		{"try exec", application + "TryExec=/does/not/exist\n", true},
@@ -91,6 +93,32 @@ func (s *CatalogSuite) TestWinnersMaskLowerRootsBeforeFiltering() {
 			s.Equal([]string{"app.desktop"}, s.ids(s.discover(config)))
 		})
 	}
+}
+
+func (s *CatalogSuite) TestSuppressedEntriesRetainMetadataWithoutDiagnostics() {
+	root := s.T().TempDir()
+	s.write(filepath.Join(root, "helper.desktop"), "[Desktop Entry]\nType=Application\n"+
+		"Name=Helper\nName[x-test]=xxHelperxx\nNoDisplay=True\nNoDisplay=true\nComment=Details\n")
+	s.write(filepath.Join(root, "service.desktop"), "[Desktop Entry]\nType=Service\n"+
+		"Name=Service\nName[x-test]=xxServicexx\nNoDisplay=true\nExec=service\n")
+	s.write(filepath.Join(root, "port.desktop"), application+"Terminal=False\n")
+	snapshot := s.discover(CatalogConfig{Roots: []string{root}})
+	s.Empty(snapshot.Diagnostics())
+	s.Equal([]string{"port.desktop"}, s.ids(snapshot))
+	helper, exists := snapshot.Lookup("helper.desktop")
+	s.Require().True(exists)
+	s.True(helper.Valid)
+	s.False(helper.Visible)
+	s.True(helper.Entry.NoDisplay)
+	s.Equal("Helper", helper.Entry.Name.Selected)
+	s.Equal("Details", helper.Entry.Comment.Selected)
+	s.Empty(helper.Entry.Exec.Decoded)
+	service, exists := snapshot.Lookup("service.desktop")
+	s.Require().True(exists)
+	s.True(service.Valid)
+	s.False(service.Visible)
+	s.Equal("Service", service.Entry.Name.Selected)
+	s.Equal("service", service.Entry.Exec.Decoded)
 }
 
 func (s *CatalogSuite) TestLogicalOrderingCollisionsAndImmutableMetadata() {

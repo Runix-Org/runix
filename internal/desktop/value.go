@@ -66,6 +66,17 @@ func decodeValue(raw string, list, unicodeAllowed bool) ([]string, error) {
 	return parts, nil
 }
 
+// Normalize only ASCII case variants of the two desktop boolean values.
+func normalizeBoolean(value string) string {
+	if len(value) == len("true") && strings.EqualFold(value, "true") {
+		return "true"
+	}
+	if len(value) == len("false") && strings.EqualFold(value, "false") {
+		return "false"
+	}
+	return value
+}
+
 func asciiLetter(char rune) bool {
 	return char >= 'a' && char <= 'z' || char >= 'A' && char <= 'Z'
 }
@@ -83,9 +94,14 @@ func validLocale(locale string) bool {
 	if language == "" || hasCountry && !validComponent(country) {
 		return false
 	}
-	for _, char := range language {
-		if !asciiLetter(char) {
+	for part := range strings.SplitSeq(language, "-") {
+		if part == "" {
 			return false
+		}
+		for _, char := range part {
+			if !asciiLetter(char) {
+				return false
+			}
 		}
 	}
 	return true

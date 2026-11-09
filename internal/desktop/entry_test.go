@@ -134,6 +134,62 @@ func (s *EntrySuite) TestOutcomesAndOrderedDesktops() {
 	}
 }
 
+func (s *EntrySuite) TestBooleanCaseVariantsAndIdenticalDuplicates() {
+	for _, value := range []string{"true", "True", "TRUE", "tRuE", "false", "False", "FALSE", "fAlSe"} {
+		s.Run(value, func() {
+			want := strings.EqualFold(value, "true")
+			entry := s.parse(application+"Hidden="+value+"\nNoDisplay="+value+
+				"\nTerminal="+value+"\nDBusActivatable="+value, Environment{})
+			s.Equal(want, entry.Hidden)
+			s.Equal(want, entry.NoDisplay)
+			s.Equal(want, entry.Terminal)
+			s.Equal(want, entry.DBusActivatable)
+		})
+	}
+	entry := s.parse(application+"Name= Base \t\nExec=example\nTerminal=False\nTerminal=false\n"+
+		"NoDisplay=TRUE\nNoDisplay=true\nHidden=FALSE\nHidden=False\n"+
+		"DBusActivatable=True\nDBusActivatable=TRUE\nName[de.UTF-8]=Deutsch\nName[de]=Deutsch\n"+
+		"X-Test=one\nX-Test=one\n[Other]\nName=One\nName= One \n", Environment{Lang: "de"})
+	s.Equal("Deutsch", entry.Name.Selected)
+	s.Equal("example", entry.Exec.Decoded)
+	s.False(entry.Terminal)
+	s.False(entry.Hidden)
+	s.True(entry.DBusActivatable)
+	s.True(entry.NoDisplay)
+	s.Equal(Invisible, entry.Disposition)
+}
+
+func (s *EntrySuite) TestRetainsMetadataBeforeVisibilityClassification() {
+	for _, test := range []struct {
+		name, properties string
+		want             Disposition
+	}{
+		{"hidden", "Type=Application\nHidden=TRUE\n", Hidden},
+		{"service", "Type=Service\n", Unsupported},
+		{"no display without command", "Type=Application\nNoDisplay=True\n", Invisible},
+		{"no display empty command", "Type=Application\nNoDisplay=true\nExec=\n", Invisible},
+	} {
+		s.Run(test.name, func() {
+			entry := s.parse("[Desktop Entry]\n"+test.properties+
+				"Name=Base\nName[x-test]=xxBasexx\nName[de]=Deutsch\nComment=Details\n"+
+				"Keywords=helper;\nCategories=Utility;\nIcon=helper\nPath=/tmp\nTerminal=True\n",
+				Environment{Lang: "de"})
+			s.Equal(test.want, entry.Disposition)
+			s.Equal("Base", entry.Name.Base)
+			s.Equal("Deutsch", entry.Name.Selected)
+			s.Equal("Details", entry.Comment.Base)
+			s.Equal([]string{"helper"}, entry.Keywords.Base)
+			s.Equal([]string{"Utility"}, entry.Categories)
+			s.Equal("helper", entry.Icon.Selected)
+			s.Equal("/tmp", entry.Path)
+			s.True(entry.Terminal)
+			s.Empty(entry.Exec.Decoded)
+		})
+	}
+	entry := s.parse(application+"Name[x-test]=xxBasexx\n", Environment{})
+	s.Equal("Base", entry.Name.Selected)
+}
+
 func (s *EntrySuite) TestRejectsMalformedInputWithSourceContext() {
 	for _, test := range []struct {
 		name string
@@ -153,11 +209,19 @@ func (s *EntrySuite) TestRejectsMalformedInputWithSourceContext() {
 		{"invalid key", application + "Bad_Key=x", "Bad_Key"},
 		{"missing delimiter", application + "No delimiter", "No delimiter"},
 		{"invalid boolean", application + "Terminal=1", "Terminal"},
+		{"boolean alias", application + "Terminal=yes", "Terminal"},
+		{"non-ASCII boolean", application + "Terminal=falſe", "Terminal"},
+		{"conflicting boolean", application + "NoDisplay=True\nNoDisplay=False", "NoDisplay"},
+		{"conflicting command", application + "Exec=other", "Exec"},
+		{"conflicting normalized locale", application + "Name[de.UTF-8]=One\nName[de]=Two", "Name[de]"},
+		{"no display invalid boolean", application + "NoDisplay=true\nTerminal=bad", "Terminal"},
+		{"no display invalid escape", application + "NoDisplay=true\nComment=bad\\q", "Comment"},
 		{"localized boolean", application + "Hidden[de]=true", "Hidden[de]"},
 		{"unknown escape", application + `Comment=bad\q`, "Comment"},
 		{"truncated escape", application + "Comment=bad\\", "Comment"},
 		{"unselected bad translation", application + `Name[de]=bad\q`, "Name[de]"},
 		{"invalid locale suffix", application + "Name[de@]=Bad", "Name[de@]"},
+		{"empty language subtag", application + "Name[x--test]=Bad", "Name[x--test]"},
 		{"missing translation base", application + "Comment[de]=Text", "Comment[de]"},
 		{"localized Exec", application + "Exec[de]=example", "Exec[de]"},
 		{"scalar semicolon escape", application + `Comment=bad\;`, "Comment"},

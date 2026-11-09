@@ -122,7 +122,7 @@ func parseFields(data []byte, source Source) (fields, error) {
 		return nil, fail(0, "", "desktop file is not valid UTF-8")
 	}
 	values := make(fields)
-	groups := make(map[string]map[string]bool)
+	groups := make(map[string]fields)
 	group := ""
 	line := 0
 	for raw := range strings.SplitSeq(string(data), "\n") {
@@ -142,7 +142,7 @@ func parseFields(data []byte, source Source) (fields, error) {
 			if len(groups) == 0 && group != "Desktop Entry" {
 				return nil, fail(line, "", "Desktop Entry must be the first group")
 			}
-			groups[group] = make(map[string]bool)
+			groups[group] = make(fields)
 			continue
 		}
 		key, value, found := strings.Cut(text, "=")
@@ -153,12 +153,23 @@ func parseFields(data []byte, source Source) (fields, error) {
 		if base, locale, localized := splitKey(key); localized {
 			key = base + "[" + stripEncoding(locale) + "]"
 		}
-		if groups[group][key] {
-			return nil, fail(line, key, "duplicate key")
-		}
-		groups[group][key] = true
+		value = strings.Trim(value, " \t")
 		if group == "Desktop Entry" {
-			values[key] = field{value: strings.Trim(value, " \t"), line: line}
+			switch key {
+			case "Hidden", "NoDisplay", "Terminal", "DBusActivatable":
+				value = normalizeBoolean(value)
+			}
+		}
+		if previous, exists := groups[group][key]; exists {
+			if previous.value != value {
+				return nil, fail(line, key, "duplicate key with conflicting values")
+			}
+			continue
+		}
+		item := field{value: value, line: line}
+		groups[group][key] = item
+		if group == "Desktop Entry" {
+			values[key] = item
 		}
 	}
 	if _, exists := groups["Desktop Entry"]; !exists {
@@ -248,18 +259,7 @@ func parseEntry(values fields, source Source, environment Environment) (Entry, e
 		}
 	}
 	entry.Hidden = values["Hidden"].value == "true"
-	if entry.Hidden {
-		entry.Disposition = Hidden
-		return entry, nil
-	}
 	entry.Type = scalar(decoded, "Type")
-	if entry.Type == "" {
-		return Entry{}, fail("Type", "missing application type")
-	}
-	if entry.Type != "Application" {
-		entry.Disposition = Unsupported
-		return entry, nil
-	}
 	locales := environment.locales()
 	entry.Name = localizedText(decoded, "Name", locales)
 	entry.GenericName = localizedText(decoded, "GenericName", locales)
@@ -269,16 +269,28 @@ func parseEntry(values fields, source Source, environment Environment) (Entry, e
 	entry.Categories = decoded["Categories"]
 	entry.Exec = ExecValue{Raw: values["Exec"].value, Decoded: scalar(decoded, "Exec")}
 	entry.DBusActivatable = values["DBusActivatable"].value == "true"
-	if strings.TrimSpace(entry.Name.Base) == "" {
-		return Entry{}, fail("Name", "application requires a nonempty base name")
-	}
-	if strings.TrimSpace(entry.Exec.Decoded) == "" && !entry.DBusActivatable {
-		return Entry{}, fail("Exec", "application requires Exec or DBusActivatable=true")
-	}
 	entry.NoDisplay = values["NoDisplay"].value == "true"
 	entry.Terminal = values["Terminal"].value == "true"
 	entry.TryExec = scalar(decoded, "TryExec")
 	entry.Path = scalar(decoded, "Path")
+	// Retain all supported metadata before classifying menu visibility.
+	if entry.Hidden {
+		entry.Disposition = Hidden
+		return entry, nil
+	}
+	if entry.Type == "" {
+		return Entry{}, fail("Type", "missing application type")
+	}
+	if entry.Type != "Application" {
+		entry.Disposition = Unsupported
+		return entry, nil
+	}
+	if strings.TrimSpace(entry.Name.Base) == "" {
+		return Entry{}, fail("Name", "application requires a nonempty base name")
+	}
+	if !entry.NoDisplay && strings.TrimSpace(entry.Exec.Decoded) == "" && !entry.DBusActivatable {
+		return Entry{}, fail("Exec", "application requires Exec or DBusActivatable=true")
+	}
 	_, onlyPresent := values["OnlyShowIn"]
 	if entry.NoDisplay || !shownIn(environment.CurrentDesktop, entry, onlyPresent) {
 		entry.Disposition = Invisible
