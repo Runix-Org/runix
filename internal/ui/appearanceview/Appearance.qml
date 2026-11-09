@@ -19,6 +19,7 @@ QtObject {
     readonly property string fallbackReason: snapshot.fallback_reason || ""
     readonly property string error: snapshot.error || ""
     readonly property var roles: snapshot.roles || ({})
+    readonly property string importStatus: snapshot.import_status || ""
     readonly property var foregrounds: {
         const result = ({})
         const list = roles.foregrounds || []
@@ -51,6 +52,8 @@ QtObject {
     readonly property var darkThemes: snapshot.dark_themes || []
     function setPreferences(value) { return command({op: "preferences", preferences: value}) }
     function setScheme(value) { return command({op: "scheme", scheme: value}) }
+    function importJSON(text) { return command({op: "import_json", json: text}) }
+    function importFile(path) { return command({op: "import_file", path: path}) }
     function observeScheme(scheme) {
         if (scheme === Qt.ColorScheme.Light)
             setScheme("light")

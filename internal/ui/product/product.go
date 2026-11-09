@@ -30,6 +30,9 @@ import (
 //go:embed Main.qml
 var document []byte
 
+//go:embed AppearanceSettings.qml
+var appearanceDocument []byte
+
 // Options contains the product's explicit window and activation integrations.
 type Options struct {
 	ActivationSocket string
@@ -61,6 +64,17 @@ func Run(args []string, options Options) error {
 		engine.Delete()
 		return controlsErr
 	}
+	appearanceComponent := qml.NewQQmlComponent2(engine.QQmlEngine)
+	appearanceComponent.SetParent(engine.QObject)
+	appearanceURL := qt.NewQUrl3("qrc:/runix/product/AppearanceSettings.qml")
+	appearanceComponent.SetData(appearanceDocument, appearanceURL)
+	appearanceURL.Delete()
+	if !appearanceComponent.IsReady() {
+		componentErr := fmt.Errorf("load appearance settings: %s", appearanceComponent.ErrorString())
+		engine.Delete()
+		return componentErr
+	}
+	engine.RootContext().SetContextProperty("runixAppearanceSettingsComponent", appearanceComponent.QObject)
 	ctx, cancel := context.WithCancel(context.Background())
 	var catalog atomic.Pointer[launchable.Catalog]
 	var deliveryMu sync.Mutex

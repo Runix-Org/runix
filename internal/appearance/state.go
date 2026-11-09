@@ -7,6 +7,7 @@ import (
 
 	"runix/internal/preferences"
 	"runix/internal/theme"
+	"runix/internal/themeimports"
 )
 
 type Mode string
@@ -44,6 +45,7 @@ type Snapshot struct {
 type State struct {
 	mu       sync.Mutex
 	store    *preferences.Store
+	root     string
 	catalog  *theme.Catalog
 	prefs    Preferences
 	scheme   Scheme
@@ -56,20 +58,100 @@ func defaults() Preferences {
 }
 
 func New(root string, catalog *theme.Catalog) *State {
-	s := &State{store: preferences.New(root), catalog: catalog, prefs: defaults(), scheme: UnknownScheme}
+	imports, importErr := themeimports.Load(root)
+	if len(imports) > 0 && catalog != nil {
+		sources := make(map[string][]byte, len(imports))
+		for _, entry := range catalog.List("") {
+			sources[entry.ID] = []byte(entry.Original)
+		}
+		for id, data := range imports {
+			sources[id] = data
+		}
+		if combined, err := theme.NewCatalog(sources); err == nil {
+			catalog = combined
+		} else if importErr == nil {
+			importErr = err
+		}
+	} else if len(imports) > 0 && importErr == nil {
+		importErr = fmt.Errorf("bundled theme catalog is unavailable")
+	}
+	s := &State{store: preferences.New(root), root: root, catalog: catalog, prefs: defaults(), scheme: UnknownScheme}
+	if importErr != nil {
+		s.err = importErr.Error()
+	}
 	values, err := s.store.Read()
 	if err != nil {
-		s.err = err.Error()
+		if s.err == "" {
+			s.err = err.Error()
+		}
 	} else if raw, ok := values["appearance"]; ok {
 		p, decodeErr := decodePreferences(raw)
 		if decodeErr != nil {
-			s.err = decodeErr.Error()
+			if s.err == "" {
+				s.err = decodeErr.Error()
+			}
 		} else {
 			s.prefs = p
 		}
 	}
 	s.recompute()
 	return s
+}
+
+// Themes returns catalog entries matching the declared appearance.
+func (s *State) Themes(appearance theme.Appearance) []theme.Entry {
+	s.mu.Lock()
+	catalog := s.catalog
+	s.mu.Unlock()
+	if catalog == nil {
+		return nil
+	}
+	return catalog.List(appearance)
+}
+
+// Import adds a validated original JSON theme without changing preferences.
+func (s *State) Import(data []byte) (theme.Entry, error) {
+	entry, err := themeimports.Import(s.root, data)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err != nil {
+		s.err = err.Error()
+		s.recompute()
+		return theme.Entry{}, err
+	}
+	if s.catalog == nil {
+		s.err = "theme catalog is unavailable"
+		s.recompute()
+		return theme.Entry{}, fmt.Errorf("theme catalog is unavailable")
+	}
+	sources := make(map[string][]byte)
+	for _, existing := range s.catalog.List("") {
+		sources[existing.ID] = []byte(existing.Original)
+	}
+	sources[entry.ID] = []byte(entry.Original)
+	catalog, buildErr := theme.NewCatalog(sources)
+	if buildErr != nil {
+		s.err = buildErr.Error()
+		s.recompute()
+		return theme.Entry{}, buildErr
+	}
+	s.catalog = catalog
+	s.err = ""
+	s.recompute()
+	return entry, nil
+}
+
+// ImportFile imports a local regular file by its original bytes.
+func (s *State) ImportFile(path string) (theme.Entry, error) {
+	data, err := themeimports.ReadLocal(path)
+	if err != nil {
+		s.mu.Lock()
+		s.err = err.Error()
+		s.recompute()
+		s.mu.Unlock()
+		return theme.Entry{}, err
+	}
+	return s.Import(data)
 }
 func validMode(m Mode) bool { return m == System || m == Light || m == Dark }
 

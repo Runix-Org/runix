@@ -24,19 +24,27 @@ const (
 )
 
 type themeOption struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
+	ID                  string           `json:"id"`
+	Name                string           `json:"name"`
+	Author              string           `json:"author"`
+	AuthorUsername      string           `json:"author_username"`
+	Appearance          theme.Appearance `json:"appearance"`
+	Background          string           `json:"background"`
+	BackgroundSecondary string           `json:"background_secondary"`
+	Text                string           `json:"text"`
+	Selection           string           `json:"selection"`
 }
 
 // Adapter owns the appearance model; Delete must follow destruction of its QML engine.
 type Adapter struct {
-	model       *qt.QAbstractListModel
-	root        *qt.QModelIndex
-	state       *appearance.State
-	lightThemes []themeOption
-	darkThemes  []themeOption
-	stopped     bool
-	encoded     string
+	model        *qt.QAbstractListModel
+	root         *qt.QModelIndex
+	state        *appearance.State
+	lightThemes  []themeOption
+	darkThemes   []themeOption
+	stopped      bool
+	encoded      string
+	importStatus string
 }
 
 type colorValue struct {
@@ -86,6 +94,7 @@ type payload struct {
 	Roles          rolesValue             `json:"roles"`
 	LightThemes    []themeOption          `json:"light_themes"`
 	DarkThemes     []themeOption          `json:"dark_themes"`
+	ImportStatus   string                 `json:"import_status"`
 }
 
 // Install exposes activeAppearance and appearanceStateModel. Qt.styleHints.colorScheme
@@ -109,8 +118,8 @@ func Install(engine *qml.QQmlApplicationEngine) (*Adapter, error) {
 	}
 	a := &Adapter{
 		model: qt.NewQAbstractListModel(), root: qt.NewQModelIndex(), state: appearance.New(root, catalog),
-		lightThemes: themeOptions(catalog.List(theme.Light)), darkThemes: themeOptions(catalog.List(theme.Dark)),
 	}
+	a.refreshThemes()
 	a.encode()
 	a.model.OnRowCount(func(parent *qt.QModelIndex) int {
 		if parent.IsValid() {
@@ -139,6 +148,8 @@ func Install(engine *qml.QQmlApplicationEngine) (*Adapter, error) {
 		var command struct {
 			Op          string                 `json:"op"`
 			Preferences appearance.Preferences `json:"preferences"`
+			JSON        string                 `json:"json"`
+			Path        string                 `json:"path"`
 			Scheme      appearance.Scheme      `json:"scheme"`
 		}
 		if json.Unmarshal([]byte(value.ToString()), &command) != nil {
@@ -150,6 +161,22 @@ func Install(engine *qml.QQmlApplicationEngine) (*Adapter, error) {
 			saved = a.state.SetPreferences(command.Preferences) == nil
 		case "scheme":
 			a.state.SetScheme(command.Scheme)
+		case "import_json", "import_file":
+			var entry theme.Entry
+			var importErr error
+			if command.Op == "import_json" {
+				entry, importErr = a.state.Import([]byte(command.JSON))
+			} else {
+				entry, importErr = a.state.ImportFile(command.Path)
+			}
+			saved = importErr == nil
+			if saved {
+				a.refreshThemes()
+				a.importStatus = fmt.Sprintf("Imported %s. Select it in the %s theme list.",
+					entry.Name, entry.Appearance)
+			} else {
+				a.importStatus = importErr.Error()
+			}
 		default:
 			return false
 		}
@@ -205,6 +232,7 @@ func (a *Adapter) snapshot() payload {
 		Preferences: s.Preferences, Scheme: s.Scheme, ActiveID: s.ActiveID, Name: s.Name,
 		Appearance: s.Appearance, FallbackReason: s.FallbackReason, Error: s.Error, Roles: roles,
 		LightThemes: a.lightThemes, DarkThemes: a.darkThemes,
+		ImportStatus: a.importStatus,
 	}
 }
 
@@ -213,9 +241,21 @@ func colorJSON(c theme.Color) colorValue { return colorValue{R: c.R, G: c.G, B: 
 func themeOptions(entries []theme.Entry) []themeOption {
 	options := make([]themeOption, 0, len(entries))
 	for _, entry := range entries {
-		options = append(options, themeOption{ID: entry.ID, Name: entry.Name})
+		options = append(options, themeOption{
+			ID: entry.ID, Name: entry.Name, Author: entry.Author, AuthorUsername: entry.AuthorUsername,
+			Appearance: entry.Appearance,
+			Background: rgbHex(entry.Colors.Background), BackgroundSecondary: rgbHex(entry.Colors.BackgroundSecondary),
+			Text: rgbHex(entry.Colors.Text), Selection: rgbHex(entry.Colors.Selection),
+		})
 	}
 	return options
+}
+
+func rgbHex(c theme.RGB) string { return fmt.Sprintf("#%02X%02X%02X", c.R, c.G, c.B) }
+
+func (a *Adapter) refreshThemes() {
+	a.lightThemes = themeOptions(a.state.Themes(theme.Light))
+	a.darkThemes = themeOptions(a.state.Themes(theme.Dark))
 }
 
 func (a *Adapter) encode() {

@@ -68,7 +68,9 @@ ApplicationWindow {
         integrationOpen = true
         integrationPanel.itemAt(0).request("refresh")
     }
+    property string settingsTab: "appearance"
     onSettingsOpenChanged: { if (!settingsOpen) shortcutRequest("cancel") }
+    onSettingsTabChanged: { if (settingsTab !== "shortcut") shortcutRequest("cancel") }
     onVisibleChanged: { if (!visible) shortcutRequest("cancel") }
     Repeater {
         id: launchRepeater
@@ -177,6 +179,19 @@ ApplicationWindow {
                 }
             }
             Action { text: "Quit"; onClicked: Qt.quit() }
+        }
+        RowLayout {
+            visible: window.settingsOpen && !window.onboarding && !window.integrationOpen
+            Layout.fillWidth: true
+            Action { text: "Appearance"; primary: window.settingsTab === "appearance"; onClicked: window.settingsTab = "appearance" }
+            Action { text: "Keyboard shortcut"; primary: window.settingsTab === "shortcut"; onClicked: window.settingsTab = "shortcut" }
+        }
+        Loader {
+            id: appearanceSettings
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            visible: window.settingsOpen && !window.onboarding && !window.integrationOpen && window.settingsTab === "appearance"
+            sourceComponent: visible ? runixAppearanceSettingsComponent : null
         }
         Label {
             Layout.fillWidth: true
@@ -398,7 +413,7 @@ ApplicationWindow {
                 background: Item {}
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                visible: window.settingsOpen && !window.integrationOpen
+                visible: window.settingsOpen && !window.integrationOpen && (window.onboarding || window.settingsTab === "shortcut")
                 clip: true
                 contentWidth: availableWidth
                 contentHeight: shortcutContent.implicitHeight + 8
