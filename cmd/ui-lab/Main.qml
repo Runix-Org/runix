@@ -6,6 +6,11 @@ ApplicationWindow {
     id: window
     property var formItem: null
     property var searchInput: null
+    property int renderedFrameRevision: 0
+    Connections {
+        target: window
+        function onFrameSwapped() { window.renderedFrameRevision++ }
+    }
     // Hosts keep native controls as the focus/editing and debug targets.
     component Action: Loader {
         id: host
@@ -71,6 +76,15 @@ ApplicationWindow {
             window.registerControl("password-fixture", passwordFixture, "password", "Password fixture", [], null, true)
             window.registerControl("disabled-fixture", disabledFixture, "button", "Disabled fixture",
                 ["activate"], function() { disabledFixture.clicked() }, false)
+            window.registerControl("capture-status", captureStatus, "status", "Capture readiness", ["activate"],
+                function() { captureStatus.requestRevision++ }, false)
+            semanticDebug.controls["capture-status"].inspect = function() {
+                return {frames: window.renderedFrameRevision, frame_swapped: window.renderedFrameRevision > 0,
+                    graphics_api: captureStatus.GraphicsInfo.api, resize_status: windowCommandStatus.text,
+                    renderer: captureStatus.GraphicsInfo.api === GraphicsInfo.Software ? "software" : "other"}
+            }
+            window.registerControl("geometry-open", geometryButton, "button", "Open geometry window", ["activate"],
+                function() { geometry.open() }, false)
         }
     }
     function requestVisibility(command) {
@@ -98,7 +112,7 @@ ApplicationWindow {
                 font.pixelSize: 20
                 MouseArea { anchors.fill: parent; onPressed: windowPolicy.startMove() }
             }
-            Action { text: "Window"; onClicked: geometry.open() }
+            Action { id: geometryButton; text: "Window"; onClicked: geometry.open() }
             Action {
                 id: quit
                 text: "Quit"
@@ -400,7 +414,7 @@ ApplicationWindow {
                             ["activate"], function() { iconTheme.clicked() }, false)
                         window.registerControl("icon-refresh", iconRefresh, "button", "Refresh icons",
                             ["activate"], function() { iconRefresh.clicked() }, false)
-                        window.registerControl("icon-size", iconSize, "combobox", "Icon size",
+                        window.registerControl("icon-size", iconSizeLoader.item, "combobox", "Icon size",
                             ["focus", "key"], null, false)
                     }
                 }
@@ -459,7 +473,12 @@ ApplicationWindow {
                             window.registerControl("table", tableViewLoader, "table", "Records",
                                 ["focus", "select", "scroll", "activate"],
                                 function() { tableViewLoader.item.activate() }, false)
-                            semanticDebug.controls.table.inspect = function() { return tableViewLoader.item.inspect() }
+                            semanticDebug.controls.table.inspect = function() {
+                                const result = tableViewLoader.item.inspect()
+                                result.hovered_row = tableViewLoader.item.hoveredRow
+                                result.pressed_row = tableViewLoader.item.pressedRow
+                                return result
+                            }
                             semanticDebug.controls.table.select = function(text) {
                                 if (!/^[0-9]+$/.test(text)) return false
                                 return tableViewLoader.item.select(Number(text))
@@ -546,9 +565,11 @@ ApplicationWindow {
             }
         }
         Label {
+            id: captureStatus
+            property int requestRevision: 0
             Layout.alignment: Qt.AlignRight
             color: runixControlStyle.secondary
-            text: "Resize ↘"
+            text: "Capture request " + requestRevision + " · Resize ↘"
             MouseArea { anchors.fill: parent; onPressed: windowPolicy.startResize() }
         }
     }
@@ -562,6 +583,14 @@ ApplicationWindow {
             item.height = Qt.binding(function() { return Math.min(420, window.height - 32) })
             item.modalScrim = true
             geometryContent.parent = item.contentItem
+            if (typeof semanticDebug !== "undefined") {
+                window.registerControl("geometry-popup", geometryContent, "popup", "Geometry window", [], null, false)
+                semanticDebug.controls["geometry-popup"].inspect = function() {
+                    return {opened: item.opened, requested: windowPolicy.requestedSize,
+                        constrained: windowPolicy.constrainedSize, observed: {width: window.width, height: window.height},
+                        scale: windowPolicy.scale, output: window.Screen.name}
+                }
+            }
         }
     }
     ScrollView {

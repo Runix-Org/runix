@@ -43,7 +43,8 @@ ScrollView {
             value: control.value === undefined ? null : control.value,
             selection_start: control.selectionStart === undefined ? null : control.selectionStart,
             selection_end: control.selectionEnd === undefined ? null : control.selectionEnd,
-            activations: activationCount
+            busy: control.busy === undefined ? null : control.busy,
+            enabled: control.enabled, activations: activationCount
         }
         if (control.currentIndex !== undefined) {
             result.current_index = control.currentIndex
@@ -386,6 +387,7 @@ ScrollView {
                 item.activated.connect(function() { gallery.selectedRole = item.currentText })
             }
         }
+
         Label {
             id: inspection
             Layout.fillWidth: true
