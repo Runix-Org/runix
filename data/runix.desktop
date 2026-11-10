@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=runix
+Comment=Search and open installed applications
+Exec=runix
+Terminal=false
+Categories=Utility;
+StartupWMClass=runix

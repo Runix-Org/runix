@@ -43,9 +43,28 @@ build:
 build-release:
     go build -ldflags="-s -w" .
 
-# Build and replace the user-local executable; Hyprland integration source is embedded.
+# Build and replace the user-local executable and desktop entry.
 install: build-release
+    #!/bin/sh
+    set -eu
     install -Dm755 runix "$HOME/.config/bin/runix"
+    install -Dm644 data/runix.desktop "$HOME/.local/share/applications/runix.desktop"
+    awk '
+        /^Exec=/ {
+            path = ENVIRON["HOME"] "/.config/bin/runix"
+            printf "Exec=\""
+            for (i = 1; i <= length(path); i++) {
+                c = substr(path, i, 1)
+                if (c == "\\") printf "\\\\\\\\"
+                else if (c == "\"" || c == "$" || c == "`") printf "\\\\%s", c
+                else if (c == "%") printf "%%%%"
+                else printf "%s", c
+            }
+            print "\""
+            next
+        }
+        { print }
+    ' data/runix.desktop > "$HOME/.local/share/applications/runix.desktop"
 
 # Run the CLI, forwarding arguments.
 run *args:

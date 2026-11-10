@@ -23,6 +23,7 @@ import (
 	"runix/internal/ui/launcher"
 	"runix/internal/ui/searchview"
 	"runix/internal/ui/shared"
+	"runix/internal/ui/tray"
 	"runix/internal/ui/windowpolicy"
 	"runix/internal/usage"
 )
@@ -207,12 +208,14 @@ func Run(args []string, options Options) error {
 	}
 	stopSocket := func() {}
 	stopWindow := func() {}
+	stopTray := func() {}
 	var lifecycle *launcher.Adapter
 	stop := func() {
 		if stopped {
 			return
 		}
 		stopped = true
+		stopTray()
 		cancel()
 		if launches != nil {
 			launches.stop()
@@ -289,6 +292,7 @@ func Run(args []string, options Options) error {
 		return err
 	}
 	stopSocket = socketCleanup
+	stopTray = tray.InstallProduct(lifecycle.Request)
 	err = registry.Start(ctx, func(update launchable.Update) {
 		previous := catalog.Load()
 		current := update.Catalog

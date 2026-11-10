@@ -13,6 +13,20 @@ import (
 // Request must submit launcher work without blocking the GUI thread.
 // Call the returned cleanup on the GUI thread before destroying the application.
 func Install(request func(string) bool) func() {
+	return install(request, "runix UI lab", "toggle", []menuAction{
+		{"Show", "show"}, {"Hide", "hide"}, {"Show / Hide", "toggle"},
+	})
+}
+
+// InstallProduct installs the product's Show/Quit menu with click-to-show activation.
+// It has the same GUI-thread and cleanup requirements as Install.
+func InstallProduct(request func(string) bool) func() {
+	return install(request, "runix", "show", []menuAction{{"Show", "show"}})
+}
+
+type menuAction struct{ label, command string }
+
+func install(request func(string) bool, tooltip, clickCommand string, actions []menuAction) func() {
 	// A built-in raster icon does not depend on a desktop theme or SVG plugin.
 	image := qt.NewQImage3(32, 32, qt.QImage__Format_ARGB32)
 	image.Fill(0xff3878d4)
@@ -31,9 +45,7 @@ func Install(request func(string) bool) func() {
 	pixmap.Delete()
 	image.Delete()
 	menu := qt.NewQMenu2()
-	for _, action := range []struct{ label, command string }{
-		{"Show", "show"}, {"Hide", "hide"}, {"Show / Hide", "toggle"},
-	} {
+	for _, action := range actions {
 		menu.AddActionWithText(action.label).OnTriggered(func() {
 			if !request(action.command) {
 				fmt.Fprintln(os.Stderr, "The launcher is busy or stopping.")
@@ -43,10 +55,10 @@ func Install(request func(string) bool) func() {
 	menu.AddSeparator()
 	menu.AddActionWithText("Quit").OnTriggered(qt.QCoreApplication_Quit)
 	entry.SetContextMenu(menu)
-	entry.SetToolTip("runix UI lab")
+	entry.SetToolTip(tooltip)
 	entry.OnActivated(func(reason qt.QSystemTrayIcon__ActivationReason) {
 		if reason == qt.QSystemTrayIcon__Trigger {
-			if !request("toggle") {
+			if !request(clickCommand) {
 				fmt.Fprintln(os.Stderr, "The launcher is busy or stopping.")
 			}
 		}

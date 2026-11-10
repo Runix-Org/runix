@@ -178,7 +178,6 @@ ApplicationWindow {
                     } else window.openIntegration()
                 }
             }
-            Action { text: "Quit"; onClicked: Qt.quit() }
         }
         RowLayout {
             visible: window.settingsOpen && !window.onboarding && !window.integrationOpen
