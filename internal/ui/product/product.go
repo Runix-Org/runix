@@ -48,6 +48,8 @@ func Run(args []string, options Options) error {
 	}
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
+	restoreLogging := installLogging()
+	defer restoreLogging()
 	app := qt.NewQApplication(args)
 	defer app.Delete()
 	qt.QCoreApplication_SetApplicationName("runix")

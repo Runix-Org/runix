@@ -87,7 +87,7 @@ ComboBox {
         width: control.width
         implicitHeight: contentItem.implicitHeight
         padding: 4
-        onAboutToShow: control.invokingFocusItem = Window.activeFocusItem
+        onAboutToShow: control.invokingFocusItem = control.Window.activeFocusItem
         onClosed: {
             if (control.invokingFocusItem) control.invokingFocusItem.forceActiveFocus()
             control.invokingFocusItem = null
