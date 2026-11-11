@@ -115,9 +115,11 @@ func Install(
 			return false
 		}
 		var command struct {
-			Op    string `json:"op"`
-			Text  string `json:"text"`
-			Index int    `json:"index"`
+			Op         string `json:"op"`
+			Text       string `json:"text"`
+			Index      int    `json:"index"`
+			ID         string `json:"id"`
+			Generation uint64 `json:"generation"`
 		}
 		if json.Unmarshal([]byte(value.ToString()), &command) != nil {
 			return false
@@ -137,11 +139,9 @@ func Install(
 			}
 			a.selectRow(command.Index)
 		case "activate":
-			if a.activate == nil || !a.value.ActivationEnabled || a.value.Loading || a.value.SelectedIndex < 0 {
+			if !a.activateTarget(command.ID, command.Generation) {
 				return false
 			}
-			a.value.ActivatedID = a.value.SelectedID
-			a.activate(a.value.SelectedID, a.records[a.value.SelectedIndex].CatalogGeneration)
 		case "icons-refresh", "icons-theme":
 			a.icons.Refresh(command.Op == "icons-theme")
 			a.rows.BeginResetModel()
@@ -255,6 +255,24 @@ func (a *Adapter) publish() {
 	runtime.SetFinalizer(index, nil)
 	defer index.Delete()
 	a.state.DataChanged(index, index)
+}
+
+// activateTarget validates the displayed projection before resolving an exact stable identity.
+// Pointer callers capture both values at press time, never a recyclable delegate index.
+func (a *Adapter) activateTarget(id string, generation uint64) bool {
+	if a.activate == nil || !a.value.ActivationEnabled || a.value.Loading || id == "" ||
+		generation != a.value.AppliedGeneration || generation != a.value.Generation {
+		return false
+	}
+	for index, record := range a.records {
+		if record.ID == id {
+			a.selectRow(index)
+			a.value.ActivatedID = id
+			a.activate(id, record.CatalogGeneration)
+			return true
+		}
+	}
+	return false
 }
 
 // SetSelectionHandler observes stable selection changes on the GUI thread.

@@ -287,6 +287,8 @@ func (s *LaunchableSuite) TestProviderStartFailureRetainsOtherProviderResults() 
 			break
 		}
 	}
+	s.False(catalog.Loading())
+	s.True(catalog.Unavailable())
 	results := catalog.Search(context.Background(), "settings", nil)
 	s.Require().Len(results, 1)
 	s.Equal((Identity{"runix", "settings"}).String(), results[0].ID)
@@ -294,4 +296,26 @@ func (s *LaunchableSuite) TestProviderStartFailureRetainsOtherProviderResults() 
 	s.Equal("controlled discovery failure", catalog.Diagnostics()[0].Message)
 	_, err = r.Execute(context.Background(), s.target(catalog, Identity{"runix", "settings"}))
 	s.NoError(err)
+}
+
+func (s *LaunchableSuite) TestPendingProviderDoesNotHideUsableCommands() {
+	desktop := &testProvider{id: "desktop"}
+	commands := &testProvider{id: "runix"}
+	r, err := NewRegistry(desktop, commands)
+	s.Require().NoError(err)
+	defer r.Close()
+	updates := make(chan Update, 8)
+	s.Require().NoError(r.Start(context.Background(), func(update Update) { updates <- update }))
+	commands.emit(ProviderUpdate{Snapshot: testSnapshot(1, "settings")})
+	pending := s.update(updates).Catalog
+	s.True(pending.Loading())
+	s.False(pending.Unavailable())
+	results := pending.Search(context.Background(), "settings", nil)
+	s.Require().Len(results, 1)
+	s.Equal((Identity{"runix", "settings"}).String(), results[0].ID)
+	desktop.emit(ProviderUpdate{Snapshot: testSnapshot(1)})
+	ready := s.update(updates).Catalog
+	s.False(ready.Loading())
+	s.False(ready.Unavailable())
+	s.Equal(results, ready.Search(context.Background(), "settings", nil))
 }

@@ -145,6 +145,8 @@ type (
 		targets     map[string]Target
 		diagnostics []Diagnostic
 		generation  uint64
+		loading     bool
+		unavailable bool
 	}
 )
 
@@ -176,21 +178,11 @@ func (c *Catalog) Search(ctx context.Context, q string, counts map[string]int64)
 	return r
 }
 
-func (c *Catalog) Status() string {
-	if c == nil {
-		return "No applications found"
-	}
-	if len(c.records) == 0 {
-		if len(c.diagnostics) > 0 {
-			return "No applications found. Some sources could not be read."
-		}
-		return "No applications found"
-	}
-	if len(c.diagnostics) > 0 {
-		return "Some applications could not be read."
-	}
-	return "Applications loaded."
-}
+// Loading reports providers that have not published an initial snapshot yet.
+func (c *Catalog) Loading() bool { return c == nil || c.loading }
+
+// Unavailable reports failed providers without treating usable providers as failures.
+func (c *Catalog) Unavailable() bool { return c != nil && c.unavailable }
 
 func (c *Catalog) Diagnostics() []Diagnostic {
 	if c == nil {
@@ -258,6 +250,7 @@ func NewRegistry(providers ...Provider) (*Registry, error) {
 			return nil, fmt.Errorf("duplicate provider %q", p.ID())
 		}
 		r.providers[p.ID()] = p
+		r.snapshots[p.ID()] = nil
 	}
 	return r, nil
 }
@@ -373,8 +366,15 @@ func buildCatalog(snaps map[string]*Snapshot, prev *Catalog) *Catalog {
 	sort.Strings(pids)
 	for _, pid := range pids {
 		s := snaps[pid]
+		if s == nil {
+			c.loading = true
+			continue
+		}
 		for _, diagnostic := range s.diagnostics {
 			diagnostic.ProviderID = pid
+			if diagnostic.Code == "start" {
+				c.unavailable = true
+			}
 			c.diagnostics = append(c.diagnostics, diagnostic)
 		}
 		for _, it := range s.items {

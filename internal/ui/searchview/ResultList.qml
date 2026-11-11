@@ -8,6 +8,8 @@ FocusScope {
     property int iconSize: 32
     property int delegateCount: 0
     readonly property alias view: list
+    property bool providerLoading: false
+    property bool providerUnavailable: false
 
     function command(op, text, index) {
         if (state) state.command = JSON.stringify({op: op, text: text || "", index: index || 0})
@@ -22,7 +24,14 @@ FocusScope {
     function move(delta) {
         select(Math.max(0, Math.min(list.count - 1, info.selected_index + delta)))
     }
-    function activate() { if (info.activation_enabled) command("activate") }
+    function activationTarget() {
+        return {id: info.selected_id || "", generation: info.applied_generation}
+    }
+    function activate(target) {
+        if (!info.activation_enabled || info.loading || !state) return
+        const captured = target || activationTarget()
+        state.command = JSON.stringify({op: "activate", id: captured.id, generation: captured.generation})
+    }
     function inspect() {
         command("icons-stats")
         const rows = []
@@ -51,6 +60,7 @@ FocusScope {
     ListView {
         id: list
         anchors.fill: parent
+        anchors.bottomMargin: providerStatus.visible ? providerStatus.height : 0
         clip: true
         model: searchRows
         currentIndex: root.info.selected_index
@@ -83,7 +93,7 @@ FocusScope {
                 Rectangle {
                     anchors.fill: parent
                     color: row.highlighted ? activeAppearance.surfaces.selected
-                        : runixControlStyle.wash(row)
+                        : runixControlStyle.wash(pointer)
                 }
                 Rectangle {
                     width: 2
@@ -137,18 +147,40 @@ FocusScope {
                     }
                 }
             }
-            onClicked: root.select(index)
-            onDoubleClicked: { root.select(index); root.activate() }
+            onClicked: root.activate({id: recordID, generation: root.info.applied_generation})
+            MouseArea {
+                id: pointer
+                anchors.fill: parent
+                acceptedButtons: Qt.LeftButton
+                hoverEnabled: true
+                property var target: null
+                onPressed: target = {id: row.recordID, generation: root.info.applied_generation}
+                onClicked: root.activate(target)
+                // Accept the second press without sending a second activation.
+                onDoubleClicked: function(event) { event.accepted = true }
+            }
             Component.onCompleted: ++root.delegateCount
             Component.onDestruction: --root.delegateCount
         }
     }
     Label {
         anchors.centerIn: parent
-        visible: root.info.loading || list.count === 0
-        text: root.info.loading ? "Searching…" : "No results"
+        visible: list.count === 0
+        text: root.info.loading ? "Searching…" : root.providerLoading ? "Loading items…"
+            : root.providerUnavailable ? "Items are unavailable"
+            : root.info.query ? "No query matches" : "No available items"
         textFormat: Text.PlainText
         color: runixControlStyle.text
         padding: 12
+    }
+    Label {
+        id: providerStatus
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        visible: list.count > 0 && (root.providerLoading || root.providerUnavailable)
+        text: root.providerLoading ? "Loading applications…" : "Some sources are unavailable"
+        textFormat: Text.PlainText
+        color: root.providerLoading ? runixControlStyle.loader : runixControlStyle.secondary
+        padding: runixControlStyle.spacing
     }
 }

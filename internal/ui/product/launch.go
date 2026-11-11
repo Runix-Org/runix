@@ -22,8 +22,7 @@ type launchAdapter struct {
 	notifications notifications.Publisher
 	stopped       bool
 	value         struct {
-		Busy   bool   `json:"busy"`
-		Status string `json:"status"`
+		Busy bool `json:"busy"`
 	}
 }
 
@@ -67,15 +66,7 @@ func installLaunch(
 			return
 		}
 		a.value.Busy = outcome.State.Busy
-		a.value.Status = ""
-		displayID := outcome.State.ID
-		if identity, err := launchable.ParseIdentity(displayID); err == nil {
-			displayID = identity.ItemID
-		}
-		switch outcome.State.Phase {
-		case "submitting":
-			a.value.Status = fmt.Sprintf("Launching %s (%s)...", outcome.State.Name, displayID)
-		case "failed":
+		if outcome.State.Phase == "failed" {
 			if a.notifications != nil {
 				a.notifications.Publish(notifications.Message{
 					Severity: notifications.Error,

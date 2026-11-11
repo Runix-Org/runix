@@ -45,7 +45,7 @@ ApplicationWindow {
     title: "runix"
     flags: Qt.Window | Qt.FramelessWindowHint
     onClosing: Qt.quit()
-    property var launchInfo: ({busy: false, status: ""})
+    property var launchInfo: ({busy: false})
     property bool integrationOpen: false
     property bool integrationStartupResolved: false
     property bool shortcutStarted: false
@@ -166,8 +166,9 @@ ApplicationWindow {
         anchors.margins: 16
         spacing: 8
         RowLayout {
+            visible: window.settingsOpen || window.integrationOpen || window.onboarding
             Label {
-                text: window.onboarding ? "Shortcut setup" : window.settingsOpen ? "Settings" : window.integrationOpen ? "Integration" : "Applications"
+                text: window.onboarding ? "Shortcut setup" : window.settingsOpen ? "Settings" : "Integration"
                 font.pixelSize: 20
                 Layout.fillWidth: true
                 MouseArea { anchors.fill: parent; onPressed: windowPolicy.startMove() }
@@ -593,14 +594,7 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 readonly property bool loading: model.loading
-                Label {
-                    Layout.fillWidth: true
-                    text: model.status
-                    visible: catalog.loading || model.status.length > 0
-                    color: runixControlStyle.secondary
-                    textFormat: Text.PlainText
-                    wrapMode: Text.Wrap
-                }
+                readonly property bool unavailable: model.unavailable
                 Repeater {
                     model: searchState
                     delegate: ColumnLayout {
@@ -608,6 +602,14 @@ ApplicationWindow {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
                         readonly property var info: JSON.parse(model.snapshot)
+                        Item {
+                            Layout.fillWidth: true
+                            implicitHeight: runixControlStyle.spacing
+                            MouseArea {
+                                anchors.fill: parent
+                                onPressed: windowPolicy.startMove()
+                            }
+                        }
                         function resetSearch() { model.command = JSON.stringify({op: "reset"}) }
                         Loader {
                             id: query
@@ -616,6 +618,7 @@ ApplicationWindow {
                             onLoaded: {
                                 item.search = true
                                 item.placeholderText = "Search applications and commands…"
+                                item.Accessible.name = "Search applications and commands"
                                 item.text = Qt.binding(function() { return search.info.query || "" })
                                 item.textEdited.connect(function() {
                                     model.command = JSON.stringify({op: "query", text: item.text})
@@ -662,26 +665,78 @@ ApplicationWindow {
                             Layout.fillWidth: true
                             Layout.fillHeight: true
                             sourceComponent: resultListComponent
-                            onLoaded: item.state = model
+                            onLoaded: {
+                                item.state = model
+                                item.providerLoading = Qt.binding(function() { return catalog.loading })
+                                item.providerUnavailable = Qt.binding(function() { return catalog.unavailable })
+                            }
                         }
-                        Label {
+                        Rectangle {
                             Layout.fillWidth: true
-                            text: search.info.selected_label || ""
-                            color: runixControlStyle.secondary
-                            textFormat: Text.PlainText
-                            wrapMode: Text.WrapAnywhere
+                            implicitHeight: 1
+                            color: runixControlStyle.separator
                         }
                         RowLayout {
-                            Action {
-                                text: search.info.primary_action || "Open application"
-                                primary: true
-                                busy: window.launchInfo.busy
-                                enabled: search.info.activation_enabled && !search.info.loading && search.info.selected_index >= 0
-                                onClicked: { if (results.item) results.item.activate() }
+                            Layout.fillWidth: true
+                            implicitHeight: 36
+                            Label {
+                                text: window.launchInfo.busy ? "Opening…" : ""
+                                color: runixControlStyle.loader
+                                textFormat: Text.PlainText
+                                Layout.fillWidth: true
                             }
-                            Notice {
-                                text: window.launchInfo.status
-                                hue: window.launchInfo.busy ? "blue" : "red"
+                            Button {
+                                id: primaryAction
+                                text: search.info.primary_action || "Open item"
+                                Accessible.name: text
+                                enabled: !!search.info.activation_enabled && !search.info.loading && search.info.selected_index >= 0
+                                focusPolicy: Qt.StrongFocus
+                                hoverEnabled: true
+                                padding: runixControlStyle.spacing
+                                contentItem: Row {
+                                    spacing: runixControlStyle.spacing
+                                    Label {
+                                        text: primaryAction.text
+                                        textFormat: Text.PlainText
+                                        font.bold: true
+                                        color: runixControlStyle.foreground(primaryAction)
+                                        anchors.verticalCenter: parent.verticalCenter
+                                    }
+                                    Rectangle {
+                                        width: 24
+                                        height: 22
+                                        radius: runixControlStyle.radius
+                                        color: runixControlStyle.button
+                                        Label {
+                                            anchors.centerIn: parent
+                                            text: "↵"
+                                            color: runixControlStyle.foreground(primaryAction)
+                                        }
+                                    }
+                                }
+                                background: Rectangle {
+                                    radius: runixControlStyle.radius
+                                    color: runixControlStyle.wash(actionPointer)
+                                    border.width: primaryAction.visualFocus ? 2 : 0
+                                    border.color: runixControlStyle.focus
+                                }
+                                onClicked: { if (results.item) results.item.activate() }
+                                Keys.onReturnPressed: function(event) {
+                                    if (!event.isAutoRepeat && results.item) results.item.activate()
+                                }
+                                Keys.onEnterPressed: function(event) {
+                                    if (!event.isAutoRepeat && results.item) results.item.activate()
+                                }
+                                MouseArea {
+                                    id: actionPointer
+                                    anchors.fill: parent
+                                    acceptedButtons: Qt.LeftButton
+                                    hoverEnabled: true
+                                    property var target: null
+                                    onPressed: target = results.item ? results.item.activationTarget() : null
+                                    onClicked: { if (results.item && target) results.item.activate(target) }
+                                    onDoubleClicked: function(event) { event.accepted = true }
+                                }
                             }
                         }
                     }

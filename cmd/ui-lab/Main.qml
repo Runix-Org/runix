@@ -369,13 +369,20 @@ ApplicationWindow {
                             item.placeholderText = "Search by title, workspace, category or ID"
                             item.focus = true
                             item.textChanged.connect(screen.submit)
-                            item.accepted.connect(function() { results.item.activate() })
                         }
                     }
                     Connections {
                         target: query ? query.Keys : null
                         function onUpPressed(event) { results.item.move(-1); event.accepted = true }
                         function onDownPressed(event) { results.item.move(1); event.accepted = true }
+                        function onReturnPressed(event) {
+                            if (!event.isAutoRepeat) results.item.activate()
+                            event.accepted = true
+                        }
+                        function onEnterPressed(event) {
+                            if (!event.isAutoRepeat) results.item.activate()
+                            event.accepted = true
+                        }
                         function onPressed(event) {
                             if (event.key === Qt.Key_PageDown || event.key === Qt.Key_PageUp) {
                                 results.item.move(event.key === Qt.Key_PageDown ? 5 : -5)

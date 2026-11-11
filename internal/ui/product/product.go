@@ -116,9 +116,8 @@ func Run(args []string, options Options) error {
 	}
 	defer registry.Close()
 	stopped := false
-	status := "Loading applications…"
 	loading := true
-	failed := false
+	unavailable := false
 	state := qt.NewQAbstractListModel()
 	state.OnRowCount(func(parent *qt.QModelIndex) int {
 		if parent.IsValid() {
@@ -126,12 +125,11 @@ func Run(args []string, options Options) error {
 		}
 		return 1
 	})
-	const statusRole = int(qt.UserRole) + 1
-	const loadingRole = statusRole + 1
-	const failedRole = loadingRole + 1
+	const loadingRole = int(qt.UserRole) + 1
+	const unavailableRole = loadingRole + 1
 	state.OnRoleNames(func(_ func() map[int][]byte) map[int][]byte {
 		return map[int][]byte{
-			statusRole: []byte("status"), loadingRole: []byte("loading"), failedRole: []byte("failed"),
+			loadingRole: []byte("loading"), unavailableRole: []byte("unavailable"),
 		}
 	})
 	state.OnData(func(index *qt.QModelIndex, role int) *qt.QVariant {
@@ -139,12 +137,10 @@ func Run(args []string, options Options) error {
 			return qt.NewQVariant()
 		}
 		switch role {
-		case statusRole:
-			return qt.NewQVariant14(status)
 		case loadingRole:
 			return qt.NewQVariant8(loading)
-		case failedRole:
-			return qt.NewQVariant8(failed)
+		case unavailableRole:
+			return qt.NewQVariant8(unavailable)
 		default:
 			return qt.NewQVariant()
 		}
@@ -386,13 +382,8 @@ func Run(args []string, options Options) error {
 			if current == nil {
 				return
 			}
-			loading = false
-			failed = false
-			status = current.Status()
-			diagnostics := current.Diagnostics()
-			if current.Count() > 0 && len(diagnostics) > 0 {
-				status = ""
-			}
+			loading = current.Loading()
+			unavailable = current.Unavailable()
 			launches.controller.SetCatalog(current)
 			if catalogChanged {
 				results.RefreshCatalog(iconsChanged)
