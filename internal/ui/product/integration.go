@@ -7,10 +7,12 @@ import (
 	"os"
 	"runtime"
 
+	"runix/internal/integrationsetup"
+	"runix/internal/notifications"
+
 	qt "github.com/mappu/miqt/qt6"
 	"github.com/mappu/miqt/qt6/mainthread"
 	"github.com/mappu/miqt/qt6/qml"
-	"runix/internal/integrationsetup"
 )
 
 type integrationCommand struct {
@@ -19,24 +21,27 @@ type integrationCommand struct {
 }
 
 type integrationAdapter struct {
-	model    *qt.QAbstractListModel
-	commands chan integrationCommand
-	done     chan struct{}
-	busy     bool
-	stopped  bool
-	snapshot string
-	value    integrationsetup.Snapshot
+	model         *qt.QAbstractListModel
+	commands      chan integrationCommand
+	done          chan struct{}
+	enabled       bool
+	notifications notifications.Publisher
+	busy          bool
+	stopped       bool
+	snapshot      string
+	value         integrationsetup.Snapshot
 }
 
 // installIntegration adapts a serial worker; filesystem and compositor work never
 // run on the GUI thread. The engine owns the model and shutdown joins the worker
 // before draining its queued GUI deliveries.
-func installIntegration(ctx context.Context, engine *qml.QQmlApplicationEngine, enabled bool) *integrationAdapter {
+func installIntegration(ctx context.Context, engine *qml.QQmlApplicationEngine, enabled bool,
+	publisher notifications.Publisher,
+) *integrationAdapter {
 	a := &integrationAdapter{
 		model:    qt.NewQAbstractListModel2(engine.QObject),
 		commands: make(chan integrationCommand, 1),
-		done:     make(chan struct{}),
-		busy:     true,
+		done:     make(chan struct{}), busy: true, enabled: enabled, notifications: publisher,
 	}
 	initial := integrationsetup.Snapshot{Phase: "checking", Status: "Checking the Hyprland integration..."}
 	if !enabled {
@@ -115,7 +120,16 @@ func installIntegration(ctx context.Context, engine *qml.QQmlApplicationEngine, 
 }
 
 func (a *integrationAdapter) publish(snapshot integrationsetup.Snapshot) {
+	previous := a.value
 	a.value = snapshot
+	if a.enabled && a.notifications != nil && !a.busy && !snapshot.Available && snapshot.Phase != "checking" &&
+		(snapshot.Status != previous.Status || snapshot.Phase != previous.Phase) {
+		a.notifications.Publish(notifications.Message{
+			Severity: notifications.Error,
+			Summary:  "Hyprland integration needs attention", Details: snapshot.Status,
+			Key: "integration:connection",
+		})
+	}
 	value := struct {
 		integrationsetup.Snapshot
 		Busy bool `json:"busy"`

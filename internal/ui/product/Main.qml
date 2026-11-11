@@ -54,7 +54,6 @@ ApplicationWindow {
     property bool settingsOpen: false
     property bool onboarding: false
     property var shortcutInfo: ({busy: true, onboarding: false, available: false})
-    property string shortcutNotice: ""
     function shortcutRequest(action) {
         const panel = shortcutPanel.itemAt(0)
         if (panel) panel.request(action)
@@ -131,6 +130,7 @@ ApplicationWindow {
         enabled: !window.shortcutInfo.recording
         onActivated: {
             if (window.shortcutInfo.recording) return
+            if (notifications.item && notifications.item.closeFocusedDetails()) return
             if (window.settingsOpen && !window.onboarding) {
                 if (window.integrationOpen) {
                     window.integrationOpen = false
@@ -203,16 +203,6 @@ ApplicationWindow {
             Layout.fillHeight: true
             visible: window.settingsOpen && !window.onboarding && !window.integrationOpen && window.settingsTab === "appearance"
             sourceComponent: visible ? runixAppearanceSettingsComponent : null
-        }
-        Label {
-            Layout.fillWidth: true
-            visible: text.length > 0
-            text: [activeAppearance.error, activeAppearance.fallbackReason].filter(function(value) {
-                return value.length > 0
-            }).join(" | ")
-            textFormat: Text.PlainText
-            wrapMode: Text.Wrap
-            color: activeAppearance.foregrounds.secondary
         }
         Repeater {
             id: integrationPanel
@@ -468,7 +458,6 @@ ApplicationWindow {
                     if (window.onboarding) window.settingsOpen = true
                     if (info.completed && !info.onboarding && wasOnboarding) {
                         window.settingsOpen = false
-                        if (info.error) window.shortcutNotice = info.error
                     }
                 }
                 ColumnLayout {
@@ -604,10 +593,6 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 readonly property bool loading: model.loading
-                Notice {
-                    text: window.shortcutNotice
-                    hue: "red"
-                }
                 Label {
                     Layout.fillWidth: true
                     text: model.status
@@ -615,14 +600,6 @@ ApplicationWindow {
                     color: runixControlStyle.secondary
                     textFormat: Text.PlainText
                     wrapMode: Text.Wrap
-                }
-                Notice {
-                    text: model.activation_error
-                    hue: "red"
-                }
-                Notice {
-                    text: model.history_warning
-                    hue: "yellow"
                 }
                 Repeater {
                     model: searchState
@@ -710,6 +687,17 @@ ApplicationWindow {
                     }
                 }
             }
+        }
+    }
+    Loader {
+        id: notifications
+        anchors.fill: parent
+        z: 100
+        sourceComponent: runixNotificationsComponent
+        onLoaded: {
+            item.hostWindow = window
+            item.searchControl = Qt.binding(function() { return launcher.query })
+            item.recording = Qt.binding(function() { return !!window.shortcutInfo.recording })
         }
     }
 }

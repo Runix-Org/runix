@@ -14,12 +14,14 @@ import (
 	"runtime/cgo"
 	"unsafe"
 
-	qt "github.com/mappu/miqt/qt6"
-	"github.com/mappu/miqt/qt6/mainthread"
-	"github.com/mappu/miqt/qt6/qml"
 	"runix/internal/hotkeysettings"
 	"runix/internal/hyprlandhotkey"
 	"runix/internal/integrationsetup"
+	"runix/internal/notifications"
+
+	qt "github.com/mappu/miqt/qt6"
+	"github.com/mappu/miqt/qt6/mainthread"
+	"github.com/mappu/miqt/qt6/qml"
 )
 
 type shortcutWork struct {
@@ -31,6 +33,8 @@ type shortcutAdapter struct {
 	model          *qt.QAbstractListModel
 	filter         *qt.QObject
 	integration    *integrationAdapter
+	notifications  notifications.Publisher
+	lastError      string
 	commands       chan shortcutWork
 	done           chan struct{}
 	value          hotkeysettings.UISnapshot
@@ -47,12 +51,12 @@ type shortcutAdapter struct {
 }
 
 func installShortcuts(ctx context.Context, app *qt.QApplication, engine *qml.QQmlApplicationEngine,
-	integration *integrationAdapter, enabled bool,
+	integration *integrationAdapter, enabled bool, publisher notifications.Publisher,
 ) *shortcutAdapter {
 	a := &shortcutAdapter{
 		model: qt.NewQAbstractListModel2(engine.QObject), filter: qt.NewQObject2(engine.QObject),
-		integration: integration, commands: make(chan shortcutWork, 1), done: make(chan struct{}),
-		held: make(map[uint]bool),
+		integration: integration, notifications: publisher,
+		commands: make(chan shortcutWork, 1), done: make(chan struct{}), held: make(map[uint]bool),
 	}
 	a.handle = cgo.NewHandle(a)
 	a.capture = C.runix_capture_new(C.uintptr_t(a.handle))
@@ -189,6 +193,13 @@ func (a *shortcutAdapter) submit(command hotkeysettings.UICommand) bool {
 }
 
 func (a *shortcutAdapter) publish() {
+	if a.notifications != nil && !a.busy && a.value.ErrorEvent && a.value.Error != "" && a.value.Error != a.lastError {
+		a.notifications.Publish(notifications.Message{
+			Severity: notifications.Error,
+			Summary:  "Shortcut operation failed", Details: a.value.Error, Key: "shortcut:operation",
+		})
+	}
+	a.lastError = a.value.Error
 	value := struct {
 		hotkeysettings.UISnapshot
 		Busy          bool   `json:"busy"`

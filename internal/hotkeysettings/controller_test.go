@@ -68,6 +68,7 @@ func (s *controllerSuite) TestUnavailableSetupCanBeSkippedWithoutIPC() {
 	snapshot := s.controller.Run(context.Background(), UICommand{Action: "startup"}, false)
 	s.True(snapshot.Onboarding)
 	s.False(snapshot.Available)
+	s.False(snapshot.ErrorEvent)
 	snapshot = s.controller.Run(context.Background(), UICommand{
 		Action: "candidate", Combination: hyprlandhotkey.Combination{Keycode: 38},
 	}, false)
@@ -93,6 +94,7 @@ func (s *controllerSuite) TestFailedSaveStaysInOnboardingAndPreservesWorkingAssi
 	s.True(snapshot.Onboarding)
 	s.Nil(snapshot.Saved)
 	s.Contains(snapshot.Error, "disk full")
+	s.True(snapshot.ErrorEvent)
 	s.Empty(s.runtime.state.Bindings)
 	s.controller.service.store.write = durableWrite
 	s.candidate(38)
@@ -146,6 +148,7 @@ func (s *controllerSuite) TestDeliberateRemovalIsRememberedAndPreferenceFailureK
 	s.False(snapshot.Completed)
 	s.Require().NotNil(snapshot.Saved)
 	s.Len(s.runtime.state.Bindings, 1)
+	s.True(snapshot.ErrorEvent)
 	s.controller.dismiss = integrationsetup.DismissShortcutSetup
 	snapshot = s.run("remove")
 	s.True(snapshot.Completed)

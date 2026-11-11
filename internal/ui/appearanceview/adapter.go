@@ -9,6 +9,7 @@ import (
 	"runtime"
 
 	"runix/internal/appearance"
+	"runix/internal/notifications"
 	"runix/internal/theme"
 
 	qt "github.com/mappu/miqt/qt6"
@@ -37,14 +38,16 @@ type themeOption struct {
 
 // Adapter owns the appearance model; Delete must follow destruction of its QML engine.
 type Adapter struct {
-	model        *qt.QAbstractListModel
-	root         *qt.QModelIndex
-	state        *appearance.State
-	lightThemes  []themeOption
-	darkThemes   []themeOption
-	stopped      bool
-	encoded      string
-	importStatus string
+	model         *qt.QAbstractListModel
+	root          *qt.QModelIndex
+	state         *appearance.State
+	lightThemes   []themeOption
+	darkThemes    []themeOption
+	stopped       bool
+	encoded       string
+	importStatus  string
+	notifications notifications.Publisher
+	lastEvent     string
 }
 
 type colorValue struct {
@@ -176,6 +179,7 @@ func Install(engine *qml.QQmlApplicationEngine) (*Adapter, error) {
 					entry.Name, entry.Appearance)
 			} else {
 				a.importStatus = importErr.Error()
+				a.publishImportFailure(importErr)
 			}
 		default:
 			return false
@@ -192,6 +196,47 @@ func Install(engine *qml.QQmlApplicationEngine) (*Adapter, error) {
 	object.SetParent(engine.QObject)
 	engine.RootContext().SetContextProperty("activeAppearance", object)
 	return a, nil
+}
+
+// SetNotifications supplies the application event publisher and reports the
+// current appearance fallback/error once, followed by later state transitions.
+func (a *Adapter) SetNotifications(p notifications.Publisher) {
+	a.notifications = p
+	a.publishAppearanceState()
+}
+
+func (a *Adapter) publishAppearanceState() {
+	snapshot := a.state.Snapshot()
+	identity := snapshot.Error + "\x00" + snapshot.FallbackReason
+	if identity == a.lastEvent {
+		return
+	}
+	a.lastEvent = identity
+	if a.notifications == nil {
+		return
+	}
+	if snapshot.Error != "" {
+		a.notifications.Publish(notifications.Message{
+			Severity: notifications.Error,
+			Summary:  "Could not apply the selected appearance", Details: snapshot.Error, Key: "appearance:error",
+		})
+	}
+	if snapshot.FallbackReason != "" {
+		a.notifications.Publish(notifications.Message{
+			Severity: notifications.Warning,
+			Summary:  "Using an appearance fallback", Details: snapshot.FallbackReason, Key: "appearance:fallback",
+		})
+	}
+}
+
+func (a *Adapter) publishImportFailure(err error) {
+	if err == nil || a.notifications == nil {
+		return
+	}
+	a.notifications.Publish(notifications.Message{
+		Severity: notifications.Error,
+		Summary:  "Could not import the appearance", Details: err.Error(), Key: "appearance:import",
+	})
 }
 
 func (a *Adapter) snapshot() payload {
@@ -265,6 +310,7 @@ func (a *Adapter) encode() {
 
 func (a *Adapter) publish() {
 	a.encode()
+	a.publishAppearanceState()
 	index := a.model.Index(0, 0, a.root)
 	runtime.SetFinalizer(index, nil)
 	defer index.Delete()

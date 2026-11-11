@@ -17,9 +17,11 @@ type UICommand struct {
 
 // UISnapshot separates saved intent, candidate inspection, and operation errors.
 type UISnapshot struct {
-	Saved           *Assignment                 `json:"saved"`
-	Status          string                      `json:"status"`
-	Error           string                      `json:"error"`
+	Saved  *Assignment `json:"saved"`
+	Status string      `json:"status"`
+	Error  string      `json:"error"`
+	// ErrorEvent distinguishes failures from persistent connection guidance.
+	ErrorEvent      bool                        `json:"-"`
 	Candidate       *hyprlandhotkey.Combination `json:"candidate"`
 	CandidateStatus string                      `json:"candidate_status"`
 	CandidateError  string                      `json:"candidate_error"`
@@ -53,10 +55,12 @@ func NewController(enabled bool) *Controller {
 // integrationAvailable is the fresh product module-setup result, not installed bytes alone.
 func (c *Controller) Run(ctx context.Context, command UICommand, integrationAvailable bool) UISnapshot {
 	c.snapshot.Completed = false
+	c.snapshot.ErrorEvent = false
 	c.snapshot.Available = c.enabled && integrationAvailable
 	if c.initError != nil {
 		c.snapshot.Status = "degraded"
 		c.snapshot.Error = c.initError.Error()
+		c.snapshot.ErrorEvent = true
 		return c.snapshot
 	}
 	switch command.Action {
@@ -65,6 +69,7 @@ func (c *Controller) Run(ctx context.Context, command UICommand, integrationAvai
 		dismissed, err := c.preference()
 		if err != nil {
 			c.snapshot.Error = "Could not read the shortcut setup preference: " + err.Error()
+			c.snapshot.ErrorEvent = true
 		}
 		c.snapshot.Onboarding = c.snapshot.Saved == nil && !dismissed
 	case "refresh":
@@ -83,6 +88,7 @@ func (c *Controller) Run(ctx context.Context, command UICommand, integrationAvai
 		c.snapshot.Error = ""
 		if err := c.dismiss(); err != nil {
 			c.snapshot.Error = "Setup skipped, but the choice was not saved: " + err.Error()
+			c.snapshot.ErrorEvent = true
 		}
 		c.snapshot.Completed = true
 		c.snapshot.Onboarding = false
@@ -103,6 +109,7 @@ func (c *Controller) refresh(ctx context.Context) {
 		if err != nil {
 			c.snapshot.Status = "degraded"
 			c.snapshot.Error = err.Error()
+			c.snapshot.ErrorEvent = true
 		}
 		return
 	}
@@ -118,6 +125,7 @@ func (c *Controller) observe(snapshot Snapshot, err error) {
 	if err != nil && c.snapshot.Error == "" {
 		c.snapshot.Error = err.Error()
 	}
+	c.snapshot.ErrorEvent = c.snapshot.Error != ""
 }
 
 func (c *Controller) inspectCandidate(ctx context.Context, combination hyprlandhotkey.Combination) {
@@ -208,6 +216,7 @@ func (c *Controller) remove(ctx context.Context) {
 	// here leaves it intact, and no later startup can force setup after removal.
 	if err := c.dismiss(); err != nil {
 		c.snapshot.Error = fmt.Sprintf("Could not remember shortcut removal. The assignment was not changed: %v", err)
+		c.snapshot.ErrorEvent = true
 		return
 	}
 	snapshot, err := c.service.Remove(ctx, c.current.Token)

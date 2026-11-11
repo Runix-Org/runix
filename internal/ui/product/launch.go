@@ -6,6 +6,7 @@ import (
 	"runtime"
 
 	"runix/internal/launchable"
+	"runix/internal/notifications"
 	"runix/internal/ui/launcher"
 	"runix/internal/ui/searchview"
 
@@ -16,10 +17,11 @@ import (
 
 // launchAdapter keeps Qt presentation and window policy outside the launch controller.
 type launchAdapter struct {
-	controller *launchable.LaunchController
-	model      *qt.QAbstractListModel
-	stopped    bool
-	value      struct {
+	controller    *launchable.LaunchController
+	model         *qt.QAbstractListModel
+	notifications notifications.Publisher
+	stopped       bool
+	value         struct {
 		Busy   bool   `json:"busy"`
 		Status string `json:"status"`
 	}
@@ -27,9 +29,9 @@ type launchAdapter struct {
 
 func installLaunch(
 	engine *qml.QQmlApplicationEngine, results *searchview.Adapter, lifecycle *launcher.Adapter,
-	registry *launchable.Registry,
+	registry *launchable.Registry, publisher notifications.Publisher,
 ) *launchAdapter {
-	a := &launchAdapter{model: qt.NewQAbstractListModel2(engine.QObject)}
+	a := &launchAdapter{model: qt.NewQAbstractListModel2(engine.QObject), notifications: publisher}
 	const snapshotRole = int(qt.UserRole) + 1
 	const commandRole = snapshotRole + 1
 	a.model.OnRowCount(func(parent *qt.QModelIndex) int {
@@ -74,8 +76,13 @@ func installLaunch(
 		case "submitting":
 			a.value.Status = fmt.Sprintf("Launching %s (%s)...", outcome.State.Name, displayID)
 		case "failed":
-			a.value.Status = fmt.Sprintf("Could not launch %s (%s): %s",
-				outcome.State.Name, displayID, outcome.State.Error)
+			if a.notifications != nil {
+				a.notifications.Publish(notifications.Message{
+					Severity: notifications.Error,
+					Summary:  fmt.Sprintf("Could not launch %s", outcome.State.Name),
+					Details:  outcome.State.Error, Key: "launch:" + outcome.State.ID,
+				})
+			}
 		}
 		results.SetActivationEnabled(!outcome.State.Busy)
 		parent := qt.NewQModelIndex()

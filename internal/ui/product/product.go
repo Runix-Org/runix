@@ -17,11 +17,13 @@ import (
 	"runix/internal/commands"
 	"runix/internal/desktop"
 	"runix/internal/launchable"
+	"runix/internal/notifications"
 	"runix/internal/runixcommands"
 	"runix/internal/search"
 	"runix/internal/ui/appearanceview"
 	"runix/internal/ui/icons"
 	"runix/internal/ui/launcher"
+	"runix/internal/ui/notificationview"
 	"runix/internal/ui/searchview"
 	"runix/internal/ui/shared"
 	"runix/internal/ui/tray"
@@ -58,22 +60,39 @@ func Run(args []string, options Options) error {
 	qt.QGuiApplication_SetDesktopFileName("runix")
 	qt.QGuiApplication_SetQuitOnLastWindowClosed(false)
 	engine := qml.NewQQmlApplicationEngine()
+	notificationService := notifications.New()
+	defer notificationService.Close()
 	appearance, appearanceErr := appearanceview.Install(engine)
 	if appearanceErr != nil {
 		engine.Delete()
 		return appearanceErr
 	}
 	defer appearance.Delete()
+	appearance.SetNotifications(notificationService)
 	if controlsErr := shared.Install(engine); controlsErr != nil {
 		engine.Delete()
 		return controlsErr
 	}
+	notificationUI, notificationErr := notificationview.Install(engine, notificationService)
+	if notificationErr != nil {
+		engine.Delete()
+		return notificationErr
+	}
+	notificationUIStopped := false
+	stopNotificationUI := func() {
+		if !notificationUIStopped {
+			notificationUIStopped = true
+			notificationUI.Stop()
+		}
+	}
+	defer stopNotificationUI()
 	appearanceComponent := qml.NewQQmlComponent2(engine.QQmlEngine)
 	appearanceComponent.SetParent(engine.QObject)
 	appearanceURL := qt.NewQUrl3("qrc:/runix/product/AppearanceSettings.qml")
 	appearanceComponent.SetData(appearanceDocument, appearanceURL)
 	appearanceURL.Delete()
 	if !appearanceComponent.IsReady() {
+		stopNotificationUI()
 		componentErr := fmt.Errorf("load appearance settings: %s", appearanceComponent.ErrorString())
 		engine.Delete()
 		return componentErr
@@ -91,6 +110,7 @@ func Run(args []string, options Options) error {
 	)
 	if registryErr != nil {
 		cancel()
+		stopNotificationUI()
 		engine.Delete()
 		return registryErr
 	}
@@ -100,8 +120,6 @@ func Run(args []string, options Options) error {
 	loading := true
 	failed := false
 	state := qt.NewQAbstractListModel()
-	activationError := ""
-	historyWarning := ""
 	state.OnRowCount(func(parent *qt.QModelIndex) int {
 		if parent.IsValid() {
 			return 0
@@ -111,13 +129,9 @@ func Run(args []string, options Options) error {
 	const statusRole = int(qt.UserRole) + 1
 	const loadingRole = statusRole + 1
 	const failedRole = loadingRole + 1
-	const activationErrorRole = failedRole + 1
-	const historyWarningRole = activationErrorRole + 1
 	state.OnRoleNames(func(_ func() map[int][]byte) map[int][]byte {
 		return map[int][]byte{
 			statusRole: []byte("status"), loadingRole: []byte("loading"), failedRole: []byte("failed"),
-			activationErrorRole: []byte("activation_error"),
-			historyWarningRole:  []byte("history_warning"),
 		}
 	})
 	state.OnData(func(index *qt.QModelIndex, role int) *qt.QVariant {
@@ -131,10 +145,6 @@ func Run(args []string, options Options) error {
 			return qt.NewQVariant8(loading)
 		case failedRole:
 			return qt.NewQVariant8(failed)
-		case activationErrorRole:
-			return qt.NewQVariant14(activationError)
-		case historyWarningRole:
-			return qt.NewQVariant14(historyWarning)
 		default:
 			return qt.NewQVariant()
 		}
@@ -148,6 +158,8 @@ func Run(args []string, options Options) error {
 		defer index.Delete()
 		state.DataChanged(index, index)
 	}
+	lastHistoryWarning := ""
+	activeDiagnostics := make(map[string]string)
 	var results *searchview.Adapter
 	var historyDeliveryMu sync.Mutex
 	historyDeliveryScheduled := false
@@ -169,9 +181,15 @@ func Run(args []string, options Options) error {
 			if stopped {
 				return
 			}
-			historyWarning = history.Snapshot().Warning
-			if historyWarning != "" {
-				historyWarning = "History: " + historyWarning
+			warning := history.Snapshot().Warning
+			if warning != lastHistoryWarning {
+				lastHistoryWarning = warning
+				if warning != "" {
+					notificationService.Publish(notifications.Message{
+						Severity: notifications.Warning,
+						Summary:  "Usage history could not be saved", Details: warning, Key: "usage:history",
+					})
+				}
 			}
 			notifyState()
 			if results != nil {
@@ -204,6 +222,7 @@ func Run(args []string, options Options) error {
 	}, icons.New(nil, nil))
 	if err != nil {
 		cancel()
+		stopNotificationUI()
 		engine.Delete()
 		state.Delete()
 		return err
@@ -217,6 +236,7 @@ func Run(args []string, options Options) error {
 			return
 		}
 		stopped = true
+		stopNotificationUI()
 		stopTray()
 		cancel()
 		if launches != nil {
@@ -258,13 +278,14 @@ func Run(args []string, options Options) error {
 	if err != nil {
 		return err
 	}
-	launches = installLaunch(engine, results, lifecycle, registry)
-	integration = installIntegration(ctx, engine, options.WindowControl)
-	shortcuts = installShortcuts(ctx, app, engine, integration, options.WindowControl)
+	launches = installLaunch(engine, results, lifecycle, registry, notificationService)
+	integration = installIntegration(ctx, engine, options.WindowControl, notificationService)
+	shortcuts = installShortcuts(ctx, app, engine, integration, options.WindowControl, notificationService)
 	lifecycle.SetErrorHandler(func(err error) {
-		activationError = "Could not control the window: " + err.Error()
-		failed = true
-		notifyState()
+		notificationService.Publish(notifications.Message{
+			Severity: notifications.Error,
+			Summary:  "Could not control the window", Details: err.Error(), Key: "lifecycle:window-control",
+		})
 	})
 	launches.controller.SetSuccessHandler(history.Success)
 	url := qt.NewQUrl3("qrc:/runix/product/Main.qml")
@@ -317,6 +338,24 @@ func Run(args []string, options Options) error {
 	err = registry.Start(ctx, func(update launchable.Update) {
 		previous := catalog.Load()
 		current := update.Catalog
+		// Registry callbacks are serial; event delivery must not be coalesced with visual refreshes.
+		nextDiagnostics := make(map[string]string)
+		for _, diagnostic := range current.Diagnostics() {
+			key := fmt.Sprintf("%q:%q:%q:%q",
+				diagnostic.ProviderID, diagnostic.Code, diagnostic.Path, diagnostic.ID)
+			details := fmt.Sprintf("Provider: %s\nCode: %s\nPath: %s\nID: %s\n%s",
+				diagnostic.ProviderID, diagnostic.Code, diagnostic.Path, diagnostic.ID, diagnostic.Message)
+			nextDiagnostics[key] = details
+			if activeDiagnostics[key] != details {
+				fmt.Fprintf(os.Stderr, "%s/%s: %s [%s]: %s\n",
+					diagnostic.ProviderID, diagnostic.Code, diagnostic.Path, diagnostic.ID, diagnostic.Message)
+				notificationService.Publish(notifications.Message{
+					Severity: notifications.Warning,
+					Summary:  "A provider reported an issue", Details: details, Key: "provider:" + key,
+				})
+			}
+		}
+		activeDiagnostics = nextDiagnostics
 		deliveryMu.Lock()
 		catalog.Store(current)
 		catalogChanged := previous == nil || current.Generation() != previous.Generation()
@@ -350,15 +389,15 @@ func Run(args []string, options Options) error {
 			loading = false
 			failed = false
 			status = current.Status()
+			diagnostics := current.Diagnostics()
+			if current.Count() > 0 && len(diagnostics) > 0 {
+				status = ""
+			}
 			launches.controller.SetCatalog(current)
 			if catalogChanged {
 				results.RefreshCatalog(iconsChanged)
 			} else if iconsChanged {
 				results.RefreshIcons()
-			}
-			for _, diagnostic := range current.Diagnostics() {
-				fmt.Fprintf(os.Stderr, "%s/%s: %s [%s]: %s\n",
-					diagnostic.ProviderID, diagnostic.Code, diagnostic.Path, diagnostic.ID, diagnostic.Message)
 			}
 			parent := qt.NewQModelIndex()
 			defer parent.Delete()
