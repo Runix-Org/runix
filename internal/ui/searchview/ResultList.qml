@@ -66,6 +66,7 @@ FocusScope {
             required property string title
             required property string subtitle
             required property string category
+            required property string type
             required property string iconSource
             readonly property int iconStatus: rowImage.status
             readonly property int iconWidth: rowImage.implicitWidth
@@ -104,23 +105,35 @@ FocusScope {
                     mipmap: true
                     fillMode: Image.PreserveAspectFit
                 }
-                Column {
+                Row {
                     width: parent.width - root.iconSize - parent.spacing
                     anchors.verticalCenter: parent.verticalCenter
-                    Label {
-                        width: parent.width
-                        text: row.title + (row.category ? "  ·  " + row.category : "")
-                        textFormat: Text.PlainText
-                        color: row.enabled ? runixControlStyle.text : runixControlStyle.disabled
-                        elide: Text.ElideRight
+                    spacing: 8
+                    Column {
+                        width: parent.width - typeLabel.implicitWidth - parent.spacing
+                        Label {
+                            width: parent.width
+                            text: row.title
+                            textFormat: Text.PlainText
+                            color: row.enabled ? runixControlStyle.text : runixControlStyle.disabled
+                            elide: Text.ElideRight
+                        }
+                        Label {
+                            width: parent.width
+                            text: row.subtitle
+                            textFormat: Text.PlainText
+                            font.pixelSize: 12
+                            color: row.enabled ? runixControlStyle.secondary : runixControlStyle.disabled
+                            elide: Text.ElideRight
+                        }
                     }
                     Label {
-                        width: parent.width
-                        text: row.subtitle + "  [" + row.displayID + "]"
+                        id: typeLabel
+                        text: row.type || row.category
                         textFormat: Text.PlainText
                         font.pixelSize: 12
-                        color: row.enabled ? runixControlStyle.secondary : runixControlStyle.disabled
-                        elide: Text.ElideRight
+                        color: runixControlStyle.secondary
+                        anchors.verticalCenter: parent.verticalCenter
                     }
                 }
             }

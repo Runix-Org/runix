@@ -19,12 +19,14 @@ type (
 		id, name string
 		target   Target
 		revision uint64
+		ctx      context.Context
 		cancel   context.CancelFunc
 	}
 	LaunchController struct {
-		handoff      func(context.Context, Target) error
+		handoff      func(context.Context, Target) (ExecutionResult, error)
 		post         func(func())
 		success      func(Identity)
+		navigate     func(string) bool
 		changed      func(LaunchOutcome)
 		catalog      *Catalog
 		state        LaunchState
@@ -39,15 +41,21 @@ type (
 )
 
 func NewLaunchController(
-	handoff func(context.Context, Target) error, post func(func()), changed func(LaunchOutcome),
+	handoff func(context.Context, Target) (ExecutionResult, error), post func(func()), changed func(LaunchOutcome),
 ) *LaunchController {
 	return &LaunchController{handoff: handoff, post: post, changed: changed, state: LaunchState{Phase: "idle"}}
 }
 
 // SetSuccessHandler installs the thread-safe accounting callback before submitting work.
-// It runs on the handoff worker, independently of GUI delivery and visibility.
+// External handoffs count on the worker; internal navigation counts after GUI acknowledgement.
 func (c *LaunchController) SetSuccessHandler(success func(Identity)) {
 	c.success = success
+}
+
+// SetNavigationHandler installs synchronous GUI-thread navigation before submitting work.
+// It returns true only when the requested form actually opens in the current window.
+func (c *LaunchController) SetNavigationHandler(navigate func(string) bool) {
+	c.navigate = navigate
 }
 
 func (c *LaunchController) emit(hide bool) {
@@ -79,12 +87,12 @@ func (c *LaunchController) Submit(id string, generation uint64) bool {
 	}
 	c.selected = id
 	if c.catalog == nil {
-		c.fail(id, "Application list changed; select the application again")
+		c.fail(id, "Results changed; select the item again")
 		return false
 	}
 	_, target, ok := c.catalog.Lookup(id)
 	if !ok || target.Generation != generation {
-		c.fail(id, "Application list changed; select the application again")
+		c.fail(id, "Results changed; select the item again")
 		return false
 	}
 	name := c.catalog.byID[id].Title
@@ -92,20 +100,24 @@ func (c *LaunchController) Submit(id string, generation uint64) bool {
 		name = id
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	a := &launchAttempt{id: id, name: name, target: target, revision: c.revision, cancel: cancel}
+	a := &launchAttempt{id: id, name: name, target: target, revision: c.revision, ctx: ctx, cancel: cancel}
 	c.attempt = a
 	c.state = LaunchState{Phase: "submitting", ID: id, Name: name, Busy: true}
 	c.emit(false)
 	c.workers.Add(1)
 	go func() {
 		defer c.workers.Done()
-		err := c.handoff(ctx, target)
-		cancel()
-		if err == nil && c.success != nil {
+		result, err := c.handoff(ctx, target)
+		if err != nil || result.Navigation == "" {
+			cancel()
+		}
+		if err == nil && result.Navigation == "" && c.success != nil {
 			c.success(a.target.Identity)
 		}
 		if c.post != nil {
-			c.post(func() { c.complete(a, err) })
+			c.post(func() { c.complete(a, result, err) })
+		} else {
+			cancel()
 		}
 	}()
 	return true
@@ -122,16 +134,40 @@ func (c *LaunchController) fail(id, msg string) {
 	c.emit(false)
 }
 
-func (c *LaunchController) complete(a *launchAttempt, err error) {
+func (c *LaunchController) complete(a *launchAttempt, result ExecutionResult, err error) {
 	if c.stopped || c.attempt != a {
 		return
 	}
-	c.attempt = nil
+	defer a.cancel()
 	if err != nil {
+		c.attempt = nil
 		c.state = LaunchState{Phase: "failed", ID: a.id, Name: a.name, Error: err.Error()}
 		c.emit(false)
 		return
 	}
+	if result.Navigation != "" {
+		_, current, ok := c.catalog.Lookup(a.id)
+		if !c.visible || c.revision != a.revision || c.selected != a.id || a.ctx.Err() != nil ||
+			!ok || current != a.target {
+			c.attempt = nil
+			c.state = LaunchState{Phase: "idle"}
+			c.emit(false)
+			return
+		}
+		opened := c.navigate != nil && c.navigate(result.Navigation)
+		c.attempt = nil
+		if !opened {
+			c.fail(a.id, "Could not open the requested form")
+			return
+		}
+		if c.success != nil {
+			c.success(a.target.Identity)
+		}
+		c.state = LaunchState{Phase: "succeeded", ID: a.id, Name: a.name}
+		c.emit(false)
+		return
+	}
+	c.attempt = nil
 	c.state = LaunchState{Phase: "succeeded", ID: a.id, Name: a.name}
 	c.resetPending = true
 	c.emit(c.visible && c.revision == a.revision)

@@ -60,10 +60,12 @@ type (
 	}
 	Item struct {
 		ID, Title, Subtitle, IconName, IconPath string
+		Type, PrimaryAction                     string
 		Fields                                  []search.Field
 	}
-	Diagnostic struct{ ProviderID, Code, Path, ID, Message string }
-	Snapshot   struct {
+	ExecutionResult struct{ Navigation string }
+	Diagnostic      struct{ ProviderID, Code, Path, ID, Message string }
+	Snapshot        struct {
 		generation  uint64
 		items       []Item
 		ids         map[string]struct{}
@@ -125,7 +127,7 @@ type (
 	Provider interface {
 		ID() string
 		Start(context.Context, func(ProviderUpdate)) error
-		Execute(context.Context, string, uint64) error
+		Execute(context.Context, string, uint64) (ExecutionResult, error)
 		Close()
 	}
 	ProviderUpdate struct {
@@ -281,9 +283,23 @@ func (r *Registry) Start(ctx context.Context, cb func(Update)) error {
 	go r.publishLoop()
 	for _, p := range r.providers {
 		if err := p.Start(r.root, func(u ProviderUpdate) { r.accept(p.ID(), u) }); err != nil {
-			r.lifecycle.Unlock()
-			r.Close()
-			return err
+			p.Close()
+			r.mu.Lock()
+			previous := r.snapshots[p.ID()]
+			failed := &Snapshot{}
+			if previous != nil {
+				*failed = *previous
+			}
+			failed.diagnostics = append(append([]Diagnostic(nil), failed.diagnostics...), Diagnostic{
+				ProviderID: p.ID(), Code: "start", Message: err.Error(),
+			})
+			r.snapshots[p.ID()] = failed
+			r.dirty = true
+			r.mu.Unlock()
+			select {
+			case r.wake <- struct{}{}:
+			default:
+			}
 		}
 	}
 	r.lifecycle.Unlock()
@@ -366,6 +382,7 @@ func buildCatalog(snaps map[string]*Snapshot, prev *Catalog) *Catalog {
 			rec := search.Record{
 				ID: id, ProviderID: pid, DisplayID: it.ID, Title: it.Title, Subtitle: it.Subtitle,
 				IconName: it.IconName, IconPath: it.IconPath, CatalogGeneration: s.Generation(),
+				Type: it.Type, PrimaryAction: it.PrimaryAction,
 				Fields: append([]search.Field{}, it.Fields...),
 			}
 			if !hasFieldID(rec.Fields, it.ID) {
@@ -421,23 +438,23 @@ func sameFields(a, b []search.Field) bool {
 	return true
 }
 
-func (r *Registry) Execute(ctx context.Context, t Target) error {
+func (r *Registry) Execute(ctx context.Context, t Target) (ExecutionResult, error) {
 	if err := ctx.Err(); err != nil {
-		return err
+		return ExecutionResult{}, err
 	}
 	r.mu.Lock()
 	if r.closed {
 		r.mu.Unlock()
-		return errors.New("registry closed")
+		return ExecutionResult{}, errors.New("registry closed")
 	}
 	if err := r.root.Err(); err != nil {
 		r.mu.Unlock()
-		return err
+		return ExecutionResult{}, err
 	}
 	key := t.Identity.String()
 	if r.catalog == nil {
 		r.mu.Unlock()
-		return errors.New("launch target is stale")
+		return ExecutionResult{}, errors.New("launch target is stale")
 	}
 	current, ok := r.catalog.targets[key]
 	p := r.providers[t.Identity.ProviderID]
@@ -445,11 +462,11 @@ func (r *Registry) Execute(ctx context.Context, t Target) error {
 	if !ok || current.Generation != t.Generation || p == nil || source == nil ||
 		source.Generation() != t.Generation {
 		r.mu.Unlock()
-		return errors.New("launch target is stale")
+		return ExecutionResult{}, errors.New("launch target is stale")
 	}
 	if _, exists := source.ids[t.Identity.ItemID]; !exists {
 		r.mu.Unlock()
-		return errors.New("launch target is stale")
+		return ExecutionResult{}, errors.New("launch target is stale")
 	}
 	r.executions.Add(1)
 	root := r.root

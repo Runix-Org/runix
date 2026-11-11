@@ -114,7 +114,9 @@ func (s *ProviderSuite) TestRegistryLaunchAndRejectsRemovedTarget() {
 	id := (launchable.Identity{ProviderID: "desktop", ItemID: "app.desktop"}).String()
 	_, target, ok := initial.Lookup(id)
 	s.Require().True(ok)
-	s.NoError(registry.Execute(context.Background(), target))
+	result, err := registry.Execute(context.Background(), target)
+	s.NoError(err)
+	s.Empty(result.Navigation)
 	write("/bin/false")
 	var latest *launchable.Catalog
 	s.Require().Eventually(func() bool {
@@ -125,16 +127,19 @@ func (s *ProviderSuite) TestRegistryLaunchAndRejectsRemovedTarget() {
 		_, current, exists := latest.Lookup(id)
 		return exists && current.Generation > target.Generation
 	}, time.Second*8, time.Millisecond*20)
-	s.Error(registry.Execute(context.Background(), target))
+	_, err = registry.Execute(context.Background(), target)
+	s.Error(err)
 	_, current, ok := latest.Lookup(id)
 	s.Require().True(ok)
-	s.NoError(registry.Execute(context.Background(), current))
+	_, err = registry.Execute(context.Background(), current)
+	s.NoError(err)
 	s.Require().NoError(os.Remove(path))
 	s.Require().Eventually(func() bool {
 		catalog := registry.Catalog()
 		return catalog != nil && catalog.Count() == 0
 	}, time.Second*5, time.Millisecond*20)
-	s.Error(registry.Execute(context.Background(), current))
+	_, err = registry.Execute(context.Background(), current)
+	s.Error(err)
 }
 
 func (s *ProviderSuite) TestLiveIconChangesAreInvalidated() {

@@ -33,6 +33,7 @@ type Field struct {
 // Record is a searchable item. ID is the stable identity supplied by callers.
 type Record struct {
 	ID, Title, Subtitle, Category string
+	Type, PrimaryAction           string
 	// DisplayID is a human-readable local identity, separate from the opaque UI key.
 	DisplayID string
 	// ProviderID distinguishes namespaced identities in merged catalogs.

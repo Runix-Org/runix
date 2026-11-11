@@ -4,6 +4,7 @@ package icons
 import (
 	"bytes"
 	"container/list"
+	_ "embed"
 	"encoding/base64"
 	"image"
 	"image/color"
@@ -16,6 +17,9 @@ import (
 )
 
 const Capacity = 64
+
+//go:embed runix-settings.svg
+var settingsIcon []byte
 
 // Stats describes the adapter cache, not Qt's internal caches or GPU memory.
 type Stats struct {
@@ -111,7 +115,15 @@ func (s *Source) URL(name, path string) string {
 
 func (s *Source) resolve(name, path string) string {
 	var icon *qt.QIcon
+	var pixmap *qt.QPixmap
 	switch {
+	case name == "runix-settings" && path == "":
+		pixmap = qt.NewQPixmap()
+		runtime.SetFinalizer(pixmap, nil)
+		if !pixmap.LoadFromData4(settingsIcon, "SVG") {
+			pixmap.Delete()
+			return ""
+		}
 	case name != "" && path == "" && !strings.ContainsAny(name, `/\\`):
 		icon = qt.QIcon_FromTheme(name)
 		runtime.SetFinalizer(icon, nil)
@@ -120,11 +132,13 @@ func (s *Source) resolve(name, path string) string {
 	default:
 		return ""
 	}
-	defer icon.Delete()
-	size := qt.NewQSize2(128, 128)
-	defer size.Delete()
-	pixmap := icon.Pixmap3(size, 1)
-	runtime.SetFinalizer(pixmap, nil)
+	if icon != nil {
+		defer icon.Delete()
+		size := qt.NewQSize2(128, 128)
+		defer size.Delete()
+		pixmap = icon.Pixmap3(size, 1)
+		runtime.SetFinalizer(pixmap, nil)
+	}
 	defer pixmap.Delete()
 	if pixmap.IsNull() {
 		return ""

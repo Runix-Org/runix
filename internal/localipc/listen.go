@@ -34,6 +34,7 @@ func Listen(path string, serve func(context.Context, net.Conn)) (func(), error) 
 	if lockErr != nil {
 		return nil, errors.New("cannot lock local socket directory")
 	}
+	// Closing the directory also releases its advisory lock.
 	defer lockDir.Close()
 	lockInfo, statErr := lockDir.Stat()
 	if statErr != nil || !os.SameFile(st, lockInfo) {
@@ -42,7 +43,6 @@ func Listen(path string, serve func(context.Context, net.Conn)) (func(), error) 
 	if lockErr = syscall.Flock(int(lockDir.Fd()), syscall.LOCK_EX); lockErr != nil {
 		return nil, errors.New("cannot lock local socket directory")
 	}
-	defer syscall.Flock(int(lockDir.Fd()), syscall.LOCK_UN)
 	existing, inspectErr := os.Lstat(path)
 	if inspectErr == nil {
 		if existing.Mode()&os.ModeSocket == 0 || existing.Mode()&os.ModeSymlink != 0 {

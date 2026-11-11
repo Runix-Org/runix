@@ -50,6 +50,7 @@ ApplicationWindow {
     property bool integrationStartupResolved: false
     property bool shortcutStarted: false
     property bool shortcutStartupResolved: false
+    property int searchResetSignal: 0
     property bool settingsOpen: false
     property bool onboarding: false
     property var shortcutInfo: ({busy: true, onboarding: false, available: false})
@@ -67,6 +68,17 @@ ApplicationWindow {
         shortcutRequest("cancel")
         integrationOpen = true
         integrationPanel.itemAt(0).request("refresh")
+    }
+    function openSettingsFromCommand() {
+        if (!window.visible || window.settingsOpen || window.integrationOpen || window.onboarding) return false
+        window.settingsOpen = true
+        integrationPanel.itemAt(0).request("refresh")
+        window.shortcutRequest("refresh")
+        return true
+    }
+    function backFromSettings() {
+        if (!window.onboarding) window.searchResetSignal++
+        window.settingsOpen = false
     }
     property string settingsTab: "appearance"
     onSettingsOpenChanged: { if (!settingsOpen) shortcutRequest("cancel") }
@@ -119,7 +131,14 @@ ApplicationWindow {
         enabled: !window.shortcutInfo.recording
         onActivated: {
             if (window.shortcutInfo.recording) return
-            if (window.settingsOpen && !window.onboarding) { window.settingsOpen = false; return }
+            if (window.settingsOpen && !window.onboarding) {
+                if (window.integrationOpen) {
+                    window.integrationOpen = false
+                    window.integrationStartupResolved = true
+                    window.startShortcutSetup()
+                } else window.backFromSettings()
+                return
+            }
             window.requestVisibility("hide")
         }
     }
@@ -154,17 +173,10 @@ ApplicationWindow {
                 MouseArea { anchors.fill: parent; onPressed: windowPolicy.startMove() }
             }
             Action {
-                id: settingsButton
-                text: window.settingsOpen ? "Back" : "Settings"
-                visible: !window.integrationOpen && !window.onboarding
-                onClicked: {
-                    if (window.settingsOpen) window.settingsOpen = false
-                    else {
-                        window.settingsOpen = true
-                        integrationPanel.itemAt(0).request("refresh")
-                        window.shortcutRequest("refresh")
-                    }
-                }
+                text: "Back"
+                id: backButton
+                visible: window.settingsOpen && !window.integrationOpen && !window.onboarding
+                onClicked: window.backFromSettings()
             }
             Action {
                 id: integrationButton
@@ -592,7 +604,6 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 readonly property bool loading: model.loading
-                readonly property bool failed: model.failed
                 Notice {
                     text: window.shortcutNotice
                     hue: "red"
@@ -600,7 +611,7 @@ ApplicationWindow {
                 Label {
                     Layout.fillWidth: true
                     text: model.status
-                    visible: !catalog.loading
+                    visible: catalog.loading || model.status.length > 0
                     color: runixControlStyle.secondary
                     textFormat: Text.PlainText
                     wrapMode: Text.Wrap
@@ -620,13 +631,14 @@ ApplicationWindow {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
                         readonly property var info: JSON.parse(model.snapshot)
+                        function resetSearch() { model.command = JSON.stringify({op: "reset"}) }
                         Loader {
                             id: query
                             Layout.fillWidth: true
                             sourceComponent: runixTextFieldComponent
                             onLoaded: {
                                 item.search = true
-                                item.placeholderText = "Search applications"
+                                item.placeholderText = "Search applications and commands…"
                                 item.text = Qt.binding(function() { return search.info.query || "" })
                                 item.textEdited.connect(function() {
                                     model.command = JSON.stringify({op: "query", text: item.text})
@@ -657,11 +669,12 @@ ApplicationWindow {
                             function updateFocus() {
                                 launcher.query = window.integrationOpen ? integrationButton.item
                                     : window.settingsOpen ? (window.onboarding && shortcutPanel.itemAt(0)
-                                        ? shortcutPanel.itemAt(0).focusControl : settingsButton.item) : item
+                                        ? shortcutPanel.itemAt(0).focusControl : backButton.item) : item
                                 if (window.visible && launcher.query) launcher.query.forceActiveFocus()
                             }
                             Connections {
                                 target: window
+                                function onSearchResetSignalChanged() { search.resetSearch() }
                                 function onIntegrationOpenChanged() { query.updateFocus() }
                                 function onSettingsOpenChanged() { query.updateFocus() }
                                 function onOnboardingChanged() { query.updateFocus() }
@@ -671,22 +684,8 @@ ApplicationWindow {
                             id: results
                             Layout.fillWidth: true
                             Layout.fillHeight: true
-                            visible: !catalog.loading && !catalog.failed
                             sourceComponent: resultListComponent
                             onLoaded: item.state = model
-                        }
-                        Item {
-                            Layout.fillWidth: true
-                            Layout.fillHeight: true
-                            visible: catalog.loading || catalog.failed
-                            Label {
-                                anchors.centerIn: parent
-                                width: parent.width
-                                horizontalAlignment: Text.AlignHCenter
-                                text: catalog.loading ? "◌ Loading applications…" : "Applications are unavailable"
-                                color: catalog.loading ? runixControlStyle.loader : runixControlStyle.text
-                                wrapMode: Text.Wrap
-                            }
                         }
                         Label {
                             Layout.fillWidth: true
@@ -697,7 +696,7 @@ ApplicationWindow {
                         }
                         RowLayout {
                             Action {
-                                text: "Open"
+                                text: search.info.primary_action || "Open application"
                                 primary: true
                                 busy: window.launchInfo.busy
                                 enabled: search.info.activation_enabled && !search.info.loading && search.info.selected_index >= 0

@@ -175,7 +175,9 @@ func (c *Client) change(ctx context.Context, op string, expected State,
 			return current, err
 		}
 		if current.Epoch != expected.Epoch || current.Revision != expected.Revision {
-			return current, &OperationError{Code: "stale_state", Message: "Shortcuts changed. Check the current status."}
+			return current, &OperationError{
+				Code: "stale_state", Message: "Shortcuts changed. Check the current status.",
+			}
 		}
 		if _, err = resolveExecutable(current.Executable, current.Path); err != nil {
 			return current, err

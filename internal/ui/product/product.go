@@ -17,6 +17,7 @@ import (
 	"runix/internal/commands"
 	"runix/internal/desktop"
 	"runix/internal/launchable"
+	"runix/internal/runixcommands"
 	"runix/internal/search"
 	"runix/internal/ui/appearanceview"
 	"runix/internal/ui/icons"
@@ -84,9 +85,10 @@ func Run(args []string, options Options) error {
 	deliveryScheduled := false
 	pendingCatalog := false
 	pendingIcons := false
-	registry, registryErr := launchable.NewRegistry(desktop.NewProvider(
-		desktop.ReadCatalogConfig(os.Getenv), os.Environ(),
-	))
+	registry, registryErr := launchable.NewRegistry(
+		desktop.NewProvider(desktop.ReadCatalogConfig(os.Getenv), os.Environ()),
+		runixcommands.NewProvider(),
+	)
 	if registryErr != nil {
 		cancel()
 		engine.Delete()
@@ -271,6 +273,25 @@ func Run(args []string, options Options) error {
 	if len(engine.RootObjects()) == 0 {
 		return fmt.Errorf("load launcher QML: no root object; see Qt errors above")
 	}
+	root := engine.RootObjects()[0]
+	launches.controller.SetNavigationHandler(func(destination string) bool {
+		if destination != "settings" || stopped {
+			return false
+		}
+		expression := qml.NewQQmlExpression2(engine.RootContext(), root, "openSettingsFromCommand()")
+		defer expression.Delete()
+		value := expression.Evaluate()
+		runtime.SetFinalizer(value, nil)
+		defer value.Delete()
+		if expression.HasError() {
+			qmlError := expression.Error()
+			runtime.SetFinalizer(qmlError, nil)
+			defer qmlError.Delete()
+			fmt.Fprintf(os.Stderr, "open settings navigation failed: %s\n", qmlError.ToString())
+			return false
+		}
+		return value.ToBool()
+	})
 	if options.InitialOperation != "" {
 		if queueErr := lifecycle.Enqueue(options.InitialOperation); queueErr != nil {
 			return queueErr

@@ -2,6 +2,7 @@ package launchable
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -21,6 +22,7 @@ type (
 		closed         bool
 		blockExecute   bool
 		executeStarted chan struct{}
+		startError     error
 	}
 )
 
@@ -29,7 +31,7 @@ func (p *testProvider) Start(_ context.Context, update func(ProviderUpdate)) err
 	p.mu.Lock()
 	p.update = update
 	p.mu.Unlock()
-	return nil
+	return p.startError
 }
 
 func (p *testProvider) emit(update ProviderUpdate) {
@@ -41,7 +43,7 @@ func (p *testProvider) emit(update ProviderUpdate) {
 	}
 }
 
-func (p *testProvider) Execute(ctx context.Context, id string, _ uint64) error {
+func (p *testProvider) Execute(ctx context.Context, id string, _ uint64) (ExecutionResult, error) {
 	p.mu.Lock()
 	p.calls = append(p.calls, id)
 	started, block := p.executeStarted, p.blockExecute
@@ -50,10 +52,10 @@ func (p *testProvider) Execute(ctx context.Context, id string, _ uint64) error {
 		close(started)
 	}
 	if !block {
-		return nil
+		return ExecutionResult{}, nil
 	}
 	<-ctx.Done()
-	return ctx.Err()
+	return ExecutionResult{}, ctx.Err()
 }
 func (p *testProvider) Close() { p.mu.Lock(); p.closed = true; p.mu.Unlock() }
 func testSnapshot(generation uint64, ids ...string) *Snapshot {
@@ -131,16 +133,21 @@ func (s *LaunchableSuite) TestRegistryIsolatesGenerationsAndRoutesByIdentity() {
 	second := s.update(updates)
 	s.Equal(2, second.Catalog.Count())
 	oldB := s.target(second.Catalog, Identity{"beta", "same"})
-	s.NoError(r.Execute(context.Background(), oldA))
-	s.NoError(r.Execute(context.Background(), oldB))
+	_, err = r.Execute(context.Background(), oldA)
+	s.NoError(err)
+	_, err = r.Execute(context.Background(), oldB)
+	s.NoError(err)
 	a.emit(ProviderUpdate{Snapshot: testSnapshot(2, "same")})
-	s.Error(r.Execute(context.Background(), oldA), "source update must stale prior target before publication")
+	_, err = r.Execute(context.Background(), oldA)
+	s.Error(err, "source update must stale prior target before publication")
 	third := s.update(updates)
 	_, updatedA, ok := third.Catalog.Lookup((Identity{"alpha", "same"}).String())
 	s.Require().True(ok)
 	s.Equal(uint64(2), updatedA.Generation)
-	s.Error(r.Execute(context.Background(), oldA))
-	s.NoError(r.Execute(context.Background(), oldB), "updating alpha must not stale beta")
+	_, err = r.Execute(context.Background(), oldA)
+	s.Error(err)
+	_, err = r.Execute(context.Background(), oldB)
+	s.NoError(err, "updating alpha must not stale beta")
 	a.mu.Lock()
 	aCalls := append([]string(nil), a.calls...)
 	a.mu.Unlock()
@@ -209,7 +216,10 @@ func (s *LaunchableSuite) TestRegistryCloseCancelsAndJoinsExecution() {
 	initial := s.update(updates)
 	target := s.target(initial.Catalog, Identity{"active", "one"})
 	executeDone := make(chan error, 1)
-	go func() { executeDone <- r.Execute(context.Background(), target) }()
+	go func() {
+		_, executeErr := r.Execute(context.Background(), target)
+		executeDone <- executeErr
+	}()
 	select {
 	case <-p.executeStarted:
 	case <-time.After(time.Second):
@@ -232,7 +242,8 @@ func (s *LaunchableSuite) TestRegistryCloseCancelsAndJoinsExecution() {
 	providerClosed := p.closed
 	p.mu.Unlock()
 	s.True(providerClosed)
-	s.Error(r.Execute(context.Background(), target))
+	_, err = r.Execute(context.Background(), target)
+	s.Error(err)
 }
 
 func (s *LaunchableSuite) TestUsageRefreshPreservesSourceGenerationAndNamespaces() {
@@ -258,4 +269,29 @@ func (s *LaunchableSuite) TestUsageRefreshPreservesSourceGenerationAndNamespaces
 	s.True(ok)
 	s.Equal(before, after)
 	s.Equal(revision, catalog.Generation())
+}
+
+func (s *LaunchableSuite) TestProviderStartFailureRetainsOtherProviderResults() {
+	failed := &testProvider{id: "desktop", startError: errors.New("controlled discovery failure")}
+	usable := &testProvider{id: "runix"}
+	r, err := NewRegistry(failed, usable)
+	s.Require().NoError(err)
+	defer r.Close()
+	updates := make(chan Update, 8)
+	s.Require().NoError(r.Start(context.Background(), func(update Update) { updates <- update }))
+	usable.emit(ProviderUpdate{Snapshot: testSnapshot(1, "settings")})
+	var catalog *Catalog
+	for {
+		catalog = s.update(updates).Catalog
+		if catalog.Count() == 1 && len(catalog.Diagnostics()) == 1 {
+			break
+		}
+	}
+	results := catalog.Search(context.Background(), "settings", nil)
+	s.Require().Len(results, 1)
+	s.Equal((Identity{"runix", "settings"}).String(), results[0].ID)
+	s.Equal("desktop", catalog.Diagnostics()[0].ProviderID)
+	s.Equal("controlled discovery failure", catalog.Diagnostics()[0].Message)
+	_, err = r.Execute(context.Background(), s.target(catalog, Identity{"runix", "settings"}))
+	s.NoError(err)
 }

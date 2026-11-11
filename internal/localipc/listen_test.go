@@ -25,22 +25,24 @@ func (s *ListenSuite) privateDir() string {
 
 func (s *ListenSuite) TestRemovesStaleSocketAndStartsListener() {
 	path := filepath.Join(s.privateDir(), "service.sock")
-	stale, err := net.Listen("unix", path)
+	stale, err := (&net.ListenConfig{}).Listen(s.T().Context(), "unix", path)
 	s.Require().NoError(err)
-	stale.(*net.UnixListener).SetUnlinkOnClose(false)
+	unixListener, ok := stale.(*net.UnixListener)
+	s.Require().True(ok)
+	unixListener.SetUnlinkOnClose(false)
 	s.Require().NoError(stale.Close())
 
 	stop, err := Listen(path, func(context.Context, net.Conn) {})
 	s.Require().NoError(err)
 	defer stop()
-	conn, err := net.Dial("unix", path)
+	conn, err := (&net.Dialer{}).DialContext(s.T().Context(), "unix", path)
 	s.Require().NoError(err)
 	s.NoError(conn.Close())
 }
 
 func (s *ListenSuite) TestPreservesActiveSocket() {
 	path := filepath.Join(s.privateDir(), "service.sock")
-	active, err := net.Listen("unix", path)
+	active, err := (&net.ListenConfig{}).Listen(s.T().Context(), "unix", path)
 	s.Require().NoError(err)
 	defer active.Close()
 	before, err := os.Lstat(path)
@@ -52,7 +54,7 @@ func (s *ListenSuite) TestPreservesActiveSocket() {
 	after, err := os.Lstat(path)
 	s.Require().NoError(err)
 	s.True(os.SameFile(before, after))
-	conn, err := net.Dial("unix", path)
+	conn, err := (&net.Dialer{}).DialContext(s.T().Context(), "unix", path)
 	s.Require().NoError(err)
 	s.NoError(conn.Close())
 }
@@ -84,12 +86,14 @@ func (s *ListenSuite) TestPreservesForeignOwnerSocket() {
 		s.T().Skip("foreign-owner fixtures require root")
 	}
 	path := filepath.Join(s.privateDir(), "service.sock")
-	stale, err := net.Listen("unix", path)
+	stale, err := (&net.ListenConfig{}).Listen(s.T().Context(), "unix", path)
 	s.Require().NoError(err)
-	stale.(*net.UnixListener).SetUnlinkOnClose(false)
+	unixListener, ok := stale.(*net.UnixListener)
+	s.Require().True(ok)
+	unixListener.SetUnlinkOnClose(false)
 	s.Require().NoError(stale.Close())
-	if err := os.Chown(path, 65534, -1); err != nil {
-		s.T().Skipf("cannot create foreign-owner socket fixture: %v", err)
+	if chownErr := os.Chown(path, 65534, -1); chownErr != nil {
+		s.T().Skipf("cannot create foreign-owner socket fixture: %v", chownErr)
 	}
 	before, err := os.Lstat(path)
 	s.Require().NoError(err)
@@ -127,7 +131,7 @@ func (s *ListenSuite) TestCompetingStartupDoesNotRemoveWinner() {
 	}
 	stop := <-stops
 	defer stop()
-	conn, dialErr := net.Dial("unix", path)
+	conn, dialErr := (&net.Dialer{}).DialContext(s.T().Context(), "unix", path)
 	s.Require().NoError(dialErr)
 	s.NoError(conn.Close())
 	if err1 != nil {

@@ -84,7 +84,10 @@ func (p *Provider) install(snapshot *Snapshot, invalidated []string) error {
 			subtitle = fallback(entry.Comment.Selected, entry.Comment.Base)
 		}
 		icon := fallback(entry.Icon.Selected, entry.Icon.Base)
-		item := launchable.Item{ID: app.Source.ID, Title: name, Subtitle: subtitle}
+		item := launchable.Item{
+			ID: app.Source.ID, Title: name, Subtitle: subtitle,
+			Type: "Application", PrimaryAction: "Open application",
+		}
 		if filepath.IsAbs(icon) && !strings.ContainsRune(icon, '\x00') {
 			item.IconPath = icon
 		} else if validThemeIcon(icon) {
@@ -140,20 +143,20 @@ func (p *Provider) install(snapshot *Snapshot, invalidated []string) error {
 }
 
 // Execute validates and captures the current visible record atomically with snapshot publication.
-func (p *Provider) Execute(ctx context.Context, itemID string, generation uint64) error {
+func (p *Provider) Execute(ctx context.Context, itemID string, generation uint64) (launchable.ExecutionResult, error) {
 	p.mu.Lock()
 	if p.closed || p.current == nil || p.current.Generation() != generation {
 		p.mu.Unlock()
-		return fmt.Errorf("desktop application selection is stale")
+		return launchable.ExecutionResult{}, fmt.Errorf("desktop application selection is stale")
 	}
 	app, exists := p.current.Lookup(itemID)
 	if !exists || !app.Visible || !app.Valid {
 		p.mu.Unlock()
-		return fmt.Errorf("desktop application is no longer visible")
+		return launchable.ExecutionResult{}, fmt.Errorf("desktop application is no longer visible")
 	}
 	entry := app.Entry
 	p.mu.Unlock()
-	return p.launcher.Launch(ctx, entry)
+	return launchable.ExecutionResult{}, p.launcher.Launch(ctx, entry)
 }
 
 // Close stops live observation and joins launcher work; repeated calls are safe.

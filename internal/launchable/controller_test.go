@@ -59,13 +59,13 @@ func (s *LaunchControllerSuite) TestDuplicateSubmissionAndSuccessReset() {
 	h := s.newHarness()
 	started, release := make(chan struct{}), make(chan struct{})
 	var once sync.Once
-	c := NewLaunchController(func(ctx context.Context, _ Target) error {
+	c := NewLaunchController(func(ctx context.Context, _ Target) (ExecutionResult, error) {
 		close(started)
 		select {
 		case <-release:
-			return nil
+			return ExecutionResult{}, nil
 		case <-ctx.Done():
-			return ctx.Err()
+			return ExecutionResult{}, ctx.Err()
 		}
 	}, h.post, h.changed)
 	defer c.Stop()
@@ -88,17 +88,17 @@ func (s *LaunchControllerSuite) TestFailureRetryAndSuccessReset() {
 	started := make(chan struct{}, 2)
 	release := make(chan struct{})
 	var once sync.Once
-	c := NewLaunchController(func(ctx context.Context, _ Target) error {
+	c := NewLaunchController(func(ctx context.Context, _ Target) (ExecutionResult, error) {
 		calls++
 		started <- struct{}{}
 		if calls == 1 {
-			return errors.New("first failure")
+			return ExecutionResult{}, errors.New("first failure")
 		}
 		select {
 		case <-release:
-			return nil
+			return ExecutionResult{}, nil
 		case <-ctx.Done():
-			return ctx.Err()
+			return ExecutionResult{}, ctx.Err()
 		}
 	}, h.post, h.changed)
 	defer c.Stop()
@@ -123,7 +123,10 @@ func (s *LaunchControllerSuite) TestFailureRetryAndSuccessReset() {
 func (s *LaunchControllerSuite) TestStaleMissingRemovedAndNilCatalogsDoNotHandoff() {
 	h := s.newHarness()
 	calls := 0
-	c := NewLaunchController(func(context.Context, Target) error { calls++; return nil }, h.post, h.changed)
+	c := NewLaunchController(func(context.Context, Target) (ExecutionResult, error) {
+		calls++
+		return ExecutionResult{}, nil
+	}, h.post, h.changed)
 	defer c.Stop()
 	id := controllerID("app.desktop")
 	s.Run("stale generation", func() { c.SetCatalog(controllerCatalog(3, "app.desktop")); s.False(c.Submit(id, 2)) })
@@ -135,7 +138,9 @@ func (s *LaunchControllerSuite) TestStaleMissingRemovedAndNilCatalogsDoNotHandof
 
 func (s *LaunchControllerSuite) TestSelectionClearsOnlyWhenSelectionChanges() {
 	h := s.newHarness()
-	c := NewLaunchController(func(context.Context, Target) error { return nil }, h.post, h.changed)
+	c := NewLaunchController(func(context.Context, Target) (ExecutionResult, error) {
+		return ExecutionResult{}, nil
+	}, h.post, h.changed)
 	defer c.Stop()
 	c.SetCatalog(controllerCatalog(2, "app.desktop"))
 	id := controllerID("app.desktop")
@@ -151,13 +156,13 @@ func (s *LaunchControllerSuite) TestHiddenFailureDoesNotRequestHideOrReset() {
 	h := s.newHarness()
 	started, release := make(chan struct{}), make(chan struct{})
 	var once sync.Once
-	c := NewLaunchController(func(ctx context.Context, _ Target) error {
+	c := NewLaunchController(func(ctx context.Context, _ Target) (ExecutionResult, error) {
 		close(started)
 		select {
 		case <-release:
-			return errors.New("failed while hidden")
+			return ExecutionResult{}, errors.New("failed while hidden")
 		case <-ctx.Done():
-			return ctx.Err()
+			return ExecutionResult{}, ctx.Err()
 		}
 	}, h.post, h.changed)
 	defer c.Stop()
@@ -178,13 +183,13 @@ func (s *LaunchControllerSuite) TestVisibilityRevisionSuppressesHideButKeepsRese
 	h := s.newHarness()
 	started, release := make(chan struct{}), make(chan struct{})
 	var once sync.Once
-	c := NewLaunchController(func(ctx context.Context, _ Target) error {
+	c := NewLaunchController(func(ctx context.Context, _ Target) (ExecutionResult, error) {
 		close(started)
 		select {
 		case <-release:
-			return nil
+			return ExecutionResult{}, nil
 		case <-ctx.Done():
-			return ctx.Err()
+			return ExecutionResult{}, ctx.Err()
 		}
 	}, h.post, h.changed)
 	defer c.Stop()
@@ -205,10 +210,10 @@ func (s *LaunchControllerSuite) TestVisibilityRevisionSuppressesHideButKeepsRese
 func (s *LaunchControllerSuite) TestStopCancelsWorkerAndInvalidatesQueuedCallback() {
 	h := s.newHarness()
 	started := make(chan struct{})
-	c := NewLaunchController(func(ctx context.Context, _ Target) error {
+	c := NewLaunchController(func(ctx context.Context, _ Target) (ExecutionResult, error) {
 		close(started)
 		<-ctx.Done()
-		return ctx.Err()
+		return ExecutionResult{}, ctx.Err()
 	}, h.post, h.changed)
 	defer c.Stop()
 	c.SetCatalog(controllerCatalog(1, "app.desktop"))
@@ -237,15 +242,15 @@ func (s *LaunchControllerSuite) TestHandoffReceivesFiveSecondDeadline() {
 	deadlines := make(chan time.Time, 1)
 	release := make(chan struct{})
 	var once sync.Once
-	c := NewLaunchController(func(ctx context.Context, _ Target) error {
+	c := NewLaunchController(func(ctx context.Context, _ Target) (ExecutionResult, error) {
 		deadline, ok := ctx.Deadline()
 		s.True(ok)
 		deadlines <- deadline
 		select {
 		case <-release:
-			return nil
+			return ExecutionResult{}, nil
 		case <-ctx.Done():
-			return ctx.Err()
+			return ExecutionResult{}, ctx.Err()
 		}
 	}, h.post, h.changed)
 	defer c.Stop()
@@ -267,7 +272,10 @@ func (s *LaunchControllerSuite) TestAccountingSurvivesCatalogVisibilityAndQueued
 	h := s.newHarness()
 	release := make(chan struct{})
 	counted := make(chan Identity, 2)
-	c := NewLaunchController(func(context.Context, Target) error { <-release; return nil }, h.post, h.changed)
+	c := NewLaunchController(func(context.Context, Target) (ExecutionResult, error) {
+		<-release
+		return ExecutionResult{}, nil
+	}, h.post, h.changed)
 	defer c.Stop()
 	c.SetSuccessHandler(func(id Identity) { counted <- id })
 	c.SetCatalog(controllerCatalog(1, "app.desktop"))
@@ -296,7 +304,9 @@ func (s *LaunchControllerSuite) TestRejectedAndFailedAttemptsDoNotCount() {
 		s.Run(failure.Error(), func() {
 			h := s.newHarness()
 			counted := make(chan Identity, 1)
-			c := NewLaunchController(func(context.Context, Target) error { return failure }, h.post, h.changed)
+			c := NewLaunchController(func(context.Context, Target) (ExecutionResult, error) {
+				return ExecutionResult{}, failure
+			}, h.post, h.changed)
 			defer c.Stop()
 			c.SetSuccessHandler(func(id Identity) { counted <- id })
 			c.SetCatalog(controllerCatalog(2, "app.desktop"))
@@ -304,6 +314,102 @@ func (s *LaunchControllerSuite) TestRejectedAndFailedAttemptsDoNotCount() {
 			s.True(c.Submit(controllerID("app.desktop"), 2))
 			h.deliver(s)
 			s.Empty(counted)
+		})
+	}
+}
+
+func (s *LaunchControllerSuite) TestNavigationCountsOnlyAfterOpeningAndNeverHides() {
+	h := s.newHarness()
+	c := NewLaunchController(func(context.Context, Target) (ExecutionResult, error) {
+		return ExecutionResult{Navigation: "settings"}, nil
+	}, h.post, h.changed)
+	defer c.Stop()
+	snapshot, err := NewSnapshot(1, []Item{{ID: "settings", Title: "Settings"}}, nil)
+	s.Require().NoError(err)
+	c.SetCatalog(buildCatalog(map[string]*Snapshot{"runix": snapshot}, nil))
+	c.VisibilityChanged(true)
+	id := Identity{"runix", "settings"}
+	opened, counted := 0, 0
+	c.SetNavigationHandler(func(destination string) bool {
+		s.Equal("settings", destination)
+		s.Zero(counted, "a request is not a successful opening")
+		opened++
+		return true
+	})
+	c.SetSuccessHandler(func(actual Identity) {
+		s.Equal(id, actual)
+		s.Equal(1, opened)
+		counted++
+	})
+	s.True(c.Submit(id.String(), 1))
+	s.False(c.Submit(id.String(), 1))
+	var callback func()
+	select {
+	case callback = <-h.callbacks:
+	case <-time.After(time.Second):
+		s.FailNow("navigation completion was not queued")
+	}
+	s.Zero(opened)
+	s.Zero(counted)
+	callback()
+	callback()
+	s.Equal(1, counted)
+	s.Equal(1, opened)
+	s.False(h.outcomes[len(h.outcomes)-1].Hide)
+	s.False(c.BeforeShow())
+	c.SetNavigationHandler(func(string) bool { return false })
+	s.True(c.Submit(id.String(), 1))
+	h.deliver(s)
+	s.Equal(1, counted, "revisiting an open form must not count")
+	s.Equal("failed", c.state.Phase)
+}
+
+func (s *LaunchControllerSuite) TestObsoleteNavigationDoesNotOpenOrCount() {
+	for _, change := range []string{
+		"hide", "new interaction", "selection", "source changed", "removed", "deadline", "stop",
+	} {
+		s.Run(change, func() {
+			h := s.newHarness()
+			c := NewLaunchController(func(context.Context, Target) (ExecutionResult, error) {
+				return ExecutionResult{Navigation: "settings"}, nil
+			}, h.post, h.changed)
+			defer c.Stop()
+			c.SetCatalog(controllerCatalog(1, "settings"))
+			c.VisibilityChanged(true)
+			opened, counted := 0, 0
+			c.SetNavigationHandler(func(string) bool { opened++; return true })
+			c.SetSuccessHandler(func(Identity) { counted++ })
+			s.True(c.Submit(controllerID("settings"), 1))
+			var callback func()
+			select {
+			case callback = <-h.callbacks:
+			case <-time.After(time.Second):
+				s.FailNow("navigation completion was not queued")
+			}
+			switch change {
+			case "hide":
+				c.VisibilityChanged(false)
+			case "new interaction":
+				c.VisibilityChanged(false)
+				c.VisibilityChanged(true)
+			case "selection":
+				c.Select(controllerID("another"))
+			case "source changed":
+				c.SetCatalog(controllerCatalog(2, "settings"))
+			case "removed":
+				c.SetCatalog(controllerCatalog(2))
+			case "deadline":
+				expired, cancel := context.WithDeadline(context.Background(), time.Unix(0, 0))
+				defer cancel()
+				c.attempt.ctx = expired
+			case "stop":
+				c.Stop()
+			}
+			callback()
+			s.Zero(opened)
+			s.Zero(counted)
+			s.False(c.BeforeShow())
+			s.False(h.outcomes[len(h.outcomes)-1].Hide)
 		})
 	}
 }

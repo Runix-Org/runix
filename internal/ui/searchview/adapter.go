@@ -29,6 +29,7 @@ const (
 	categoryRole
 	iconRole
 	displayIDRole
+	typeRole
 )
 
 type snapshot struct {
@@ -40,6 +41,7 @@ type snapshot struct {
 	SelectedIndex     int          `json:"selected_index"`
 	SelectedID        string       `json:"selected_id"`
 	SelectedLabel     string       `json:"selected_label"`
+	PrimaryAction     string       `json:"primary_action"`
 	ActivatedID       string       `json:"activated_id"`
 	ReceivedMS        int64        `json:"received_ms"`
 	AppliedMS         int64        `json:"applied_ms"`
@@ -121,6 +123,9 @@ func Install(
 			return false
 		}
 		switch command.Op {
+		case "reset":
+			a.Reset()
+			return true
 		case "query":
 			a.value.Query = command.Text
 			a.value.Loading = true
@@ -160,7 +165,7 @@ func Install(
 			idRole: []byte("recordID"), titleRole: []byte("title"),
 			subtitleRole: []byte("subtitle"), categoryRole: []byte("category"),
 			iconRole:      []byte("iconSource"),
-			displayIDRole: []byte("displayID"),
+			displayIDRole: []byte("displayID"), typeRole: []byte("type"),
 		}
 	})
 	a.rows.OnData(func(index *qt.QModelIndex, role int) *qt.QVariant {
@@ -179,6 +184,8 @@ func Install(
 			return qt.NewQVariant14(record.Subtitle)
 		case categoryRole:
 			return qt.NewQVariant14(record.Category)
+		case typeRole:
+			return qt.NewQVariant14(record.Type)
 		case iconRole:
 			return qt.NewQVariant14(a.icons.URL(record.IconName, record.IconPath))
 		default:
@@ -204,9 +211,11 @@ func (a *Adapter) selectRow(index int) {
 	a.value.SelectedIndex = index
 	a.value.SelectedID = ""
 	a.value.SelectedLabel = ""
+	a.value.PrimaryAction = ""
 	if index >= 0 {
 		a.value.SelectedID = a.records[index].ID
 		a.value.SelectedLabel = displayID(a.records[index])
+		a.value.PrimaryAction = a.records[index].PrimaryAction
 	}
 	if a.selected != nil {
 		a.selected(a.value.SelectedID)
