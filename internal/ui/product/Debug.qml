@@ -64,6 +64,9 @@ Item {
         register("settings-shortcut", "button", "Keyboard shortcut", ["focus", "activate"], function() {
             control("settings-shortcut").clicked()
         })
+        register("settings-window-reset", "button", "Reset window layout", ["focus", "activate"], function() {
+            control("settings-window-reset").clicked()
+        })
         // No generic result activation: development inspection does not authorize external launches.
         semanticDebug.registerControl("settings-open", window.contentItem, "navigation", "Open settings",
                                       ["activate"], null, false)

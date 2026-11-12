@@ -1,4 +1,4 @@
-// Package usage stores aggregate launch counts without depending on Qt or the product lifecycle.
+// Package usage stores launch counts and window state without depending on Qt or the product lifecycle.
 package usage
 
 import (
@@ -104,8 +104,16 @@ const createUsage = `CREATE TABLE launch_usage (
 	PRIMARY KEY(provider_id, item_id)
 ) STRICT`
 
-// Version 0 is either empty or an unversioned counter table. Migration rebuilds
-// that table under the v1 constraints in the same transaction as user_version.
+const createWindowGeometry = `CREATE TABLE window_geometry (
+	id INTEGER PRIMARY KEY CHECK(id = 1),
+	x INTEGER NOT NULL,
+	y INTEGER NOT NULL,
+	width INTEGER NOT NULL CHECK(width > 0),
+	height INTEGER NOT NULL CHECK(height > 0),
+	positioned INTEGER NOT NULL CHECK(positioned IN (0, 1))
+) STRICT`
+
+// Version 0 may contain an unversioned counter table; later upgrades are transactional.
 func initialize(ctx context.Context, db *sql.DB) (err error) {
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
@@ -123,12 +131,13 @@ func initialize(ctx context.Context, db *sql.DB) (err error) {
 	if err = tx.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil {
 		return err
 	}
-	if version < 0 || version > 1 {
-		return fmt.Errorf("unsupported history schema version %d; this build supports version 1", version)
+	if version < 0 || version > 2 {
+		return fmt.Errorf("unsupported history schema version %d; this build supports version 2", version)
 	}
 	var unexpected, tables int
 	err = tx.QueryRowContext(ctx, `SELECT count(*) FROM sqlite_schema
-		WHERE name NOT LIKE 'sqlite_%' AND (name != 'launch_usage' OR type != 'table')`).Scan(&unexpected)
+		WHERE name NOT LIKE 'sqlite_%'
+		AND ((name != 'launch_usage' AND name != 'window_geometry') OR type != 'table')`).Scan(&unexpected)
 	if err != nil {
 		return err
 	}
@@ -163,11 +172,23 @@ func initialize(ctx context.Context, db *sql.DB) (err error) {
 				return err
 			}
 		}
+		// Legacy counters are now canonical v1 before the geometry upgrade.
 		if _, err = tx.ExecContext(ctx, "PRAGMA user_version = 1"); err != nil {
 			return err
 		}
 	}
+	if version < 2 {
+		if _, err = tx.ExecContext(ctx, createWindowGeometry); err != nil {
+			return err
+		}
+		if _, err = tx.ExecContext(ctx, "PRAGMA user_version = 2"); err != nil {
+			return err
+		}
+	}
 	if err = validateSchema(ctx, tx, true); err != nil {
+		return err
+	}
+	if err = validateGeometrySchema(ctx, tx); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -190,6 +211,30 @@ func validateSchema(ctx context.Context, tx *sql.Tx, requireStrict bool) error {
 	}
 	if columns != 3 || matching != 3 || (requireStrict && strict != 1) {
 		return errors.New("history database has an incompatible launch_usage table")
+	}
+	return nil
+}
+
+func validateGeometrySchema(ctx context.Context, tx *sql.Tx) error {
+	var columns, matching, strict int
+	err := tx.QueryRowContext(ctx, `SELECT count(*), coalesce(sum(
+		(name = 'id' AND type = 'INTEGER' AND pk = 1) OR
+		(name = 'x' AND type = 'INTEGER' AND "notnull" = 1 AND pk = 0) OR
+		(name = 'y' AND type = 'INTEGER' AND "notnull" = 1 AND pk = 0) OR
+		(name = 'width' AND type = 'INTEGER' AND "notnull" = 1 AND pk = 0) OR
+		(name = 'height' AND type = 'INTEGER' AND "notnull" = 1 AND pk = 0) OR
+		(name = 'positioned' AND type = 'INTEGER' AND "notnull" = 1 AND pk = 0)), 0)
+		FROM pragma_table_info('window_geometry')`).Scan(&columns, &matching)
+	if err != nil {
+		return err
+	}
+	err = tx.QueryRowContext(ctx, `SELECT coalesce(sum(strict), 0) FROM pragma_table_list
+		WHERE schema = 'main' AND name = 'window_geometry'`).Scan(&strict)
+	if err != nil {
+		return err
+	}
+	if columns != 6 || matching != 6 || strict != 1 {
+		return errors.New("history database has an incompatible window_geometry table")
 	}
 	return nil
 }

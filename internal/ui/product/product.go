@@ -51,18 +51,24 @@ func Run(args []string, options Options) error {
 	if options.ActivationSocket == "" {
 		return fmt.Errorf("an activation socket is required")
 	}
+	notificationService := notifications.New()
+	defer notificationService.Close()
+	geometry := newGeometryState(options.WindowControl, notificationService)
+	defer geometry.close()
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 	restoreLogging := installLogging()
 	defer restoreLogging()
 	app := qt.NewQApplication(args)
-	defer app.Delete()
+	defer func() {
+		geometry.close()
+		app.Delete()
+	}()
 	qt.QCoreApplication_SetApplicationName("runix")
 	qt.QGuiApplication_SetDesktopFileName("runix")
 	qt.QGuiApplication_SetQuitOnLastWindowClosed(false)
 	engine := qml.NewQQmlApplicationEngine()
-	notificationService := notifications.New()
-	defer notificationService.Close()
+	geometry.install(engine)
 	appearance, appearanceErr := appearanceview.Install(engine)
 	if appearanceErr != nil {
 		engine.Delete()
@@ -226,7 +232,6 @@ func Run(args []string, options Options) error {
 	}
 	stopSocket := func() {}
 	stopDebug := func() {}
-	stopWindow := func() {}
 	stopTray := func() {}
 	var lifecycle *launcher.Adapter
 	stop := func() {
@@ -234,6 +239,7 @@ func Run(args []string, options Options) error {
 			return
 		}
 		stopped = true
+		geometry.close()
 		stopDebug()
 		stopNotificationUI()
 		stopTray()
@@ -255,7 +261,6 @@ func Run(args []string, options Options) error {
 			lifecycle.Stop()
 		}
 		history.Close()
-		stopWindow()
 		results.Stop()
 		qt.QCoreApplication_SendPostedEvents2(nil, int(qt.QEvent__MetaCall))
 	}
@@ -268,11 +273,6 @@ func Run(args []string, options Options) error {
 	if err = windowpolicy.Install(engine); err != nil {
 		return err
 	}
-	windowCleanup, err := windowpolicy.InstallHyprland(engine, options.WindowControl)
-	if err != nil {
-		return err
-	}
-	stopWindow = windowCleanup
 	lifecycle, err = launcher.Install(engine, options.WindowControl, options.StartHidden)
 	if err != nil {
 		return err

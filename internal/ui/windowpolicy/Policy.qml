@@ -6,7 +6,9 @@ QtObject {
     property bool attached: false
     property Window window
     property bool expanded: false
-    readonly property size requestedSize: expanded ? Qt.size(800, 640) : Qt.size(640, 420)
+    property size savedSize: Qt.size(0, 0)
+    readonly property size requestedSize: savedSize.width > 0 && savedSize.height > 0
+        ? savedSize : expanded ? Qt.size(800, 640) : Qt.size(640, 420)
     readonly property int availableWidth: window ? Math.max(1, window.Screen.desktopAvailableWidth) : 1
     readonly property int availableHeight: window ? Math.max(1, window.Screen.desktopAvailableHeight) : 1
     readonly property int maximumWidth: Math.min(960, availableWidth)
@@ -49,5 +51,5 @@ QtObject {
     }
 
     onConstrainedSizeChanged: applySize()
-    // Never save or restore x/y: Wayland placement belongs to the compositor.
+    // Product placement is handled by its optional compositor integration, not Qt x/y.
 }

@@ -140,6 +140,74 @@ func (s *StoreSuite) TestPersistenceNamespacesAndOwnedSnapshot() {
 	s.Equal(map[launchable.Identity]int64{a: 2, b: 1}, counts)
 }
 
+func (s *StoreSuite) TestGeometryRoundTripResetAndCounts() {
+	env := s.env()
+	store := s.open(env)
+	id := launchable.Identity{ProviderID: "desktop", ItemID: "app"}
+	s.Require().NoError(store.Increment(context.Background(), id))
+	geometry := WindowGeometry{X: -40, Y: 18, Width: 1280, Height: 720, Positioned: true}
+	s.Require().NoError(store.SaveWindowGeometry(context.Background(), geometry))
+	loaded, err := store.LoadWindowGeometry(context.Background())
+	s.Require().NoError(err)
+	s.Equal(&geometry, loaded)
+	// Reopen the same database to cover persistence across Store connections.
+	reopened, err := Open(context.Background(), env)
+	s.Require().NoError(err)
+	s.T().Cleanup(func() { s.NoError(reopened.Close(context.Background())) })
+	loaded, err = reopened.LoadWindowGeometry(context.Background())
+	s.Require().NoError(err)
+	s.Equal(&geometry, loaded)
+	s.Require().NoError(reopened.ResetWindowGeometry(context.Background()))
+	loaded, err = reopened.LoadWindowGeometry(context.Background())
+	s.Require().NoError(err)
+	s.Nil(loaded)
+	counts, err := reopened.Load(context.Background())
+	s.Require().NoError(err)
+	s.Equal(int64(1), counts[id])
+}
+
+func (s *StoreSuite) TestInvalidGeometryAndV2Rollback() {
+	store := s.open(s.env())
+	err := store.SaveWindowGeometry(context.Background(), WindowGeometry{Width: 0, Height: 100})
+	s.Error(err)
+	loaded, err := store.LoadWindowGeometry(context.Background())
+	s.Require().NoError(err)
+	s.Nil(loaded)
+
+	env := s.env()
+	db := s.raw(env)
+	s.exec(db, `CREATE TABLE launch_usage(
+		provider_id TEXT NOT NULL CHECK(length(provider_id)>0),
+		item_id TEXT NOT NULL CHECK(length(item_id)>0),
+		launch_count INTEGER NOT NULL CHECK(launch_count>0), PRIMARY KEY(provider_id,item_id)) STRICT;
+		CREATE TABLE window_geometry(id TEXT); PRAGMA user_version=1`)
+	s.Require().NoError(db.Close())
+	path, err := env.Path()
+	s.Require().NoError(err)
+	before, err := os.ReadFile(path)
+	s.Require().NoError(err)
+	bad, openErr := Open(context.Background(), env)
+	s.Error(openErr)
+	s.Nil(bad)
+	after, err := os.ReadFile(path)
+	s.Require().NoError(err)
+	s.Equal(before, after)
+}
+
+func (s *StoreSuite) TestPopulatedV1UpgradePreservesUsage() {
+	env := s.env()
+	db := s.raw(env)
+	s.exec(db, createUsage+`; INSERT INTO launch_usage VALUES ('desktop','kept',5); PRAGMA user_version=1`)
+	s.Require().NoError(db.Close())
+	store := s.open(env)
+	counts, err := store.Load(context.Background())
+	s.Require().NoError(err)
+	s.Equal(int64(5), counts[launchable.Identity{ProviderID: "desktop", ItemID: "kept"}])
+	geometry, err := store.LoadWindowGeometry(context.Background())
+	s.Require().NoError(err)
+	s.Nil(geometry)
+}
+
 func (s *StoreSuite) TestLegacyMigrationPreservesCounts() {
 	env := s.env()
 	db := s.raw(env)
@@ -154,7 +222,7 @@ func (s *StoreSuite) TestLegacyMigrationPreservesCounts() {
 	s.Equal(int64(7), counts[launchable.Identity{ProviderID: "links", ItemID: "missing.desktop"}])
 	var version int
 	s.Require().NoError(store.db.QueryRowContext(context.Background(), "PRAGMA user_version").Scan(&version))
-	s.Equal(1, version)
+	s.Equal(2, version)
 	s.Require().NoError(store.Increment(context.Background(), launchable.Identity{
 		ProviderID: "desktop", ItemID: "missing.desktop",
 	}))
@@ -168,7 +236,7 @@ func (s *StoreSuite) TestRejectedDatabasesRemainUnchanged() {
 			switch kind {
 			case "newer":
 				s.exec(db, createUsage+`; INSERT INTO launch_usage VALUES ('desktop', 'app', 9);
-					PRAGMA user_version = 2`)
+					PRAGMA user_version = 3`)
 			case "negative version":
 				s.exec(db, "PRAGMA user_version = -1")
 			case "foreign":

@@ -114,6 +114,8 @@ ApplicationWindow {
         }
     }
     Component.onCompleted: {
+        const geometry = geometryCommands.itemAt(0).info
+        windowPolicy.savedSize = Qt.size(geometry.width, geometry.height)
         windowPolicy.attach(window)
         launcher.window = window
         if (!launcherStartHidden) window.show()
@@ -143,21 +145,50 @@ ApplicationWindow {
         }
     }
     Repeater {
-        model: windowCommands
+        id: geometryCommands
+        model: windowGeometry
         delegate: Item {
-            function requestSize() {
-                if (windowPolicy.attached && window.visible)
-                    model.request = windowPolicy.constrainedSize
+            readonly property var info: JSON.parse(model.snapshot)
+            property size rememberedSize: Qt.size(info.width, info.height)
+            property bool placementPending: false
+            function request(action) {
+                model.command = JSON.stringify({action: action,
+                    width: action === "reset" ? 640 : action === "place"
+                        ? windowPolicy.constrainedSize.width : window.width,
+                    height: action === "reset" ? 420 : action === "place"
+                        ? windowPolicy.constrainedSize.height : window.height,
+                    visible: window.visible})
             }
-            Connections {
-                target: windowPolicy
-                function onConstrainedSizeChanged() { requestSize() }
-                function onAttachedChanged() { requestSize() }
+            onInfoChanged: {
+                if (info.reset > 0) {
+                    rememberedSize = Qt.size(640, 420)
+                    windowPolicy.savedSize = Qt.size(640, 420)
+                    windowPolicy.applySize()
+                }
             }
             Connections {
                 target: window
-                function onVisibleChanged() { requestSize() }
-                function onDevicePixelRatioChanged() { requestSize() }
+                function onVisibleChanged() {
+                    if (!window.visible) return
+                    windowPolicy.savedSize = rememberedSize
+                    windowPolicy.applySize()
+                    placementPending = true
+                }
+                // Before mapping, QWindow can still report the screen's rounded DPR.
+                function onFrameSwapped() {
+                    if (!placementPending || !window.visible) return
+                    placementPending = false
+                    request("place")
+                }
+            }
+            Timer {
+                interval: 500
+                running: window.visible && !placementPending
+                repeat: true
+                onTriggered: {
+                    rememberedSize = Qt.size(window.width, window.height)
+                    request("observe")
+                }
             }
         }
     }
@@ -208,6 +239,12 @@ ApplicationWindow {
                 text: "Keyboard shortcut"
                 primary: window.settingsTab === "shortcut"
                 onClicked: window.settingsTab = "shortcut"
+            }
+            Item { Layout.fillWidth: true }
+            Action {
+                objectName: "settings-window-reset"
+                text: "Reset window layout"
+                onClicked: geometryCommands.itemAt(0).request("reset")
             }
         }
         Loader {
