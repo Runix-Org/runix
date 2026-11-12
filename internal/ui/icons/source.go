@@ -62,9 +62,12 @@ func New(paths, themes []string) *Source {
 	img := image.NewNRGBA(image.Rect(0, 0, 128, 128))
 	for y := range 128 {
 		for x := range 128 {
-			c := color.NRGBA{R: 180, G: 50, B: 130, A: 255}
-			if x < 4 || y < 4 || x >= 124 || y >= 124 || x-y < 5 && y-x < 5 || x+y > 122 && x+y < 134 {
-				c = color.NRGBA{R: 255, G: 255, B: 255, A: 255}
+			c := color.NRGBA{}
+			if x >= 12 && x < 116 && y >= 16 && y < 112 {
+				c = color.NRGBA{R: 92, G: 100, B: 112, A: 255}
+				if x < 18 || x >= 110 || y < 22 || y >= 106 || y >= 40 && y < 46 {
+					c = color.NRGBA{R: 220, G: 224, B: 230, A: 255}
+				}
 			}
 			img.SetNRGBA(x, y, c)
 		}

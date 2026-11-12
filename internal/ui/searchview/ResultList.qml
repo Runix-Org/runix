@@ -6,6 +6,10 @@ FocusScope {
     property var state: null
     readonly property var info: state ? JSON.parse(state.snapshot) : ({loading: true, selected_index: -1})
     property int iconSize: 32
+    readonly property int rowSpacing: 10
+    readonly property int textSpacing: 8
+    readonly property int rowPadding: 8
+    readonly property int rowHeight: Math.max(44, iconSize + 12)
     property int delegateCount: 0
     readonly property alias view: list
     property bool providerLoading: false
@@ -72,10 +76,8 @@ FocusScope {
             id: row
             required property int index
             required property string recordID
-            required property string displayID
             required property string title
             required property string subtitle
-            required property string category
             required property string type
             required property string iconSource
             readonly property int iconStatus: rowImage.status
@@ -84,7 +86,10 @@ FocusScope {
             readonly property string rowTitle: title
             readonly property int rowIndex: index
             width: list.width
-            height: Math.max(54, root.iconSize + 12)
+            height: root.rowHeight
+            padding: root.rowPadding
+            Accessible.name: title
+            Accessible.description: subtitle ? subtitle + ", " + type : type
             highlighted: index === root.info.selected_index
             enabled: !root.info.loading
             focusPolicy: Qt.NoFocus
@@ -103,7 +108,7 @@ FocusScope {
                 }
             }
             contentItem: Row {
-                spacing: 10
+                spacing: root.rowSpacing
                 Image {
                     id: rowImage
                     anchors.verticalCenter: parent.verticalCenter
@@ -115,36 +120,39 @@ FocusScope {
                     mipmap: true
                     fillMode: Image.PreserveAspectFit
                 }
-                Row {
-                    width: parent.width - root.iconSize - parent.spacing
-                    anchors.verticalCenter: parent.verticalCenter
-                    spacing: 8
-                    Column {
-                        width: parent.width - typeLabel.implicitWidth - parent.spacing
-                        Label {
-                            width: parent.width
-                            text: row.title
-                            textFormat: Text.PlainText
-                            color: row.enabled ? runixControlStyle.text : runixControlStyle.disabled
-                            elide: Text.ElideRight
-                        }
-                        Label {
-                            width: parent.width
-                            text: row.subtitle
-                            textFormat: Text.PlainText
-                            font.pixelSize: 12
-                            color: row.enabled ? runixControlStyle.secondary : runixControlStyle.disabled
-                            elide: Text.ElideRight
-                        }
+                Item {
+                    width: Math.max(0, parent.width - root.iconSize - typeLabel.width - 2 * parent.spacing)
+                    height: parent.height
+                    Label {
+                        id: titleLabel
+                        width: Math.min(implicitWidth, parent.width)
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: row.title
+                        textFormat: Text.PlainText
+                        color: row.enabled ? runixControlStyle.text : runixControlStyle.disabled
+                        elide: Text.ElideRight
+                        maximumLineCount: 1
                     }
                     Label {
-                        id: typeLabel
-                        text: row.type || row.category
+                        x: titleLabel.width + root.textSpacing
+                        width: Math.max(0, parent.width - x)
+                        anchors.verticalCenter: parent.verticalCenter
+                        visible: row.subtitle.length > 0 && width > 0
+                        text: row.subtitle
                         textFormat: Text.PlainText
                         font.pixelSize: 12
-                        color: runixControlStyle.secondary
-                        anchors.verticalCenter: parent.verticalCenter
+                        color: row.enabled ? runixControlStyle.secondary : runixControlStyle.disabled
+                        elide: Text.ElideRight
+                        maximumLineCount: 1
                     }
+                }
+                Label {
+                    id: typeLabel
+                    text: row.type
+                    textFormat: Text.PlainText
+                    font.pixelSize: 12
+                    color: row.enabled ? runixControlStyle.secondary : runixControlStyle.disabled
+                    anchors.verticalCenter: parent.verticalCenter
                 }
             }
             onClicked: root.activate({id: recordID, generation: root.info.applied_generation})

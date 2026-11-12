@@ -19,6 +19,7 @@ func searchFixture(icons []labIcon) []search.Record {
 			Title:    fmt.Sprintf("%s %03d", names[index%len(names)], index%100),
 			Subtitle: fmt.Sprintf("Workspace %02d project %03d · %s", index%17, index%113, icon.label),
 			Category: categories[(index/len(names))%len(categories)],
+			Type:     categories[(index/len(names))%len(categories)],
 			IconName: icon.name,
 			IconPath: icon.path,
 		}

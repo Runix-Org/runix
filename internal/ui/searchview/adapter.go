@@ -26,9 +26,7 @@ const (
 	idRole
 	titleRole
 	subtitleRole
-	categoryRole
 	iconRole
-	displayIDRole
 	typeRole
 )
 
@@ -163,9 +161,8 @@ func Install(
 	a.rows.OnRoleNames(func(_ func() map[int][]byte) map[int][]byte {
 		return map[int][]byte{
 			idRole: []byte("recordID"), titleRole: []byte("title"),
-			subtitleRole: []byte("subtitle"), categoryRole: []byte("category"),
-			iconRole:      []byte("iconSource"),
-			displayIDRole: []byte("displayID"), typeRole: []byte("type"),
+			subtitleRole: []byte("subtitle"), typeRole: []byte("type"),
+			iconRole: []byte("iconSource"),
 		}
 	})
 	a.rows.OnData(func(index *qt.QModelIndex, role int) *qt.QVariant {
@@ -176,14 +173,10 @@ func Install(
 		switch role {
 		case idRole:
 			return qt.NewQVariant14(record.ID)
-		case displayIDRole:
-			return qt.NewQVariant14(displayID(record))
 		case titleRole:
 			return qt.NewQVariant14(record.Title)
 		case subtitleRole:
 			return qt.NewQVariant14(record.Subtitle)
-		case categoryRole:
-			return qt.NewQVariant14(record.Category)
 		case typeRole:
 			return qt.NewQVariant14(record.Type)
 		case iconRole:
