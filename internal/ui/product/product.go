@@ -39,6 +39,7 @@ var appearanceDocument []byte
 
 // Options contains the product's explicit window and activation integrations.
 type Options struct {
+	DebugOptions
 	ActivationSocket string
 	StartHidden      bool
 	WindowControl    bool
@@ -224,6 +225,7 @@ func Run(args []string, options Options) error {
 		return err
 	}
 	stopSocket := func() {}
+	stopDebug := func() {}
 	stopWindow := func() {}
 	stopTray := func() {}
 	var lifecycle *launcher.Adapter
@@ -232,6 +234,7 @@ func Run(args []string, options Options) error {
 			return
 		}
 		stopped = true
+		stopDebug()
 		stopNotificationUI()
 		stopTray()
 		cancel()
@@ -291,6 +294,11 @@ func Run(args []string, options Options) error {
 		return fmt.Errorf("load launcher QML: no root object; see Qt errors above")
 	}
 	root := engine.RootObjects()[0]
+	debugCleanup, err := installDebug(engine, root, options.DebugOptions)
+	if err != nil {
+		return err
+	}
+	stopDebug = debugCleanup
 	launches.controller.SetNavigationHandler(func(destination string) bool {
 		if destination != "settings" || stopped {
 			return false

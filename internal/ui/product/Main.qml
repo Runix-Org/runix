@@ -176,11 +176,13 @@ ApplicationWindow {
             Action {
                 text: "Back"
                 id: backButton
+                objectName: "settings-back"
                 visible: window.settingsOpen && !window.integrationOpen && !window.onboarding
                 onClicked: window.backFromSettings()
             }
             Action {
                 id: integrationButton
+                objectName: "settings-integration"
                 text: window.integrationOpen ? "Back" : "Integration"
                 visible: window.integrationOpen || window.settingsOpen || window.onboarding
                 onClicked: {
@@ -195,8 +197,18 @@ ApplicationWindow {
         RowLayout {
             visible: window.settingsOpen && !window.onboarding && !window.integrationOpen
             Layout.fillWidth: true
-            Action { text: "Appearance"; primary: window.settingsTab === "appearance"; onClicked: window.settingsTab = "appearance" }
-            Action { text: "Keyboard shortcut"; primary: window.settingsTab === "shortcut"; onClicked: window.settingsTab = "shortcut" }
+            Action {
+                objectName: "settings-appearance"
+                text: "Appearance"
+                primary: window.settingsTab === "appearance"
+                onClicked: window.settingsTab = "appearance"
+            }
+            Action {
+                objectName: "settings-shortcut"
+                text: "Keyboard shortcut"
+                primary: window.settingsTab === "shortcut"
+                onClicked: window.settingsTab = "shortcut"
+            }
         }
         Loader {
             id: appearanceSettings
@@ -599,6 +611,7 @@ ApplicationWindow {
                     model: searchState
                     delegate: ColumnLayout {
                         id: search
+                        objectName: "search-state"
                         Layout.fillWidth: true
                         Layout.fillHeight: true
                         readonly property var info: JSON.parse(model.snapshot)
@@ -613,6 +626,7 @@ ApplicationWindow {
                         function resetSearch() { model.command = JSON.stringify({op: "reset"}) }
                         Loader {
                             id: query
+                            objectName: "search-query"
                             Layout.fillWidth: true
                             sourceComponent: runixTextFieldComponent
                             onLoaded: {
@@ -662,6 +676,7 @@ ApplicationWindow {
                         }
                         Loader {
                             id: results
+                            objectName: "search-results"
                             Layout.fillWidth: true
                             Layout.fillHeight: true
                             sourceComponent: resultListComponent
@@ -687,6 +702,7 @@ ApplicationWindow {
                             }
                             Button {
                                 id: primaryAction
+                                objectName: "search-primary-action"
                                 text: search.info.primary_action || "Open item"
                                 Accessible.name: text
                                 enabled: !!search.info.activation_enabled && !search.info.loading && search.info.selected_index >= 0

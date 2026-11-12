@@ -3,6 +3,8 @@ import QtQuick
 QtObject {
     id: registry
     property var window: null
+    property string windowID: "ui-lab"
+    property var inspectWindow: null
     property var dismiss: null
     property var controls: ({})
 
@@ -56,11 +58,16 @@ QtObject {
             const items = []
             for (const id of Object.keys(controls))
                 items.push(describe(id, controls[id]))
-            return {result: {window: {id: "ui-lab", title: window.title, visible: window.visible,
+            const snapshot = {window: {id: windowID, title: window.title, visible: window.visible,
                                      active: window.active, width: window.width, height: window.height,
                                      screen: window.Screen.name, screen_dpr: window.Screen.devicePixelRatio,
-                                     coordinate_space: "window-local-logical"}, controls: items}}
+                                     coordinate_space: "window-local-logical"}, controls: items}
+            if (typeof inspectWindow === "function")
+                Object.assign(snapshot, inspectWindow())
+            return {result: snapshot}
         }
+        if (request.op !== "action")
+            return fail("unsupported_operation", "The registry does not support this operation")
         if (!Object.prototype.hasOwnProperty.call(controls, request.target))
             return fail("unknown_id", "No control has this semantic ID")
         const entry = controls[request.target]
@@ -71,6 +78,8 @@ QtObject {
             return fail("disabled", "The control is disabled")
         if (!window.visible || !item.visible)
             return fail("hidden", "The control is hidden")
+        if (typeof entry.handleAction === "function")
+            return entry.handleAction(request)
         if (entry.actions.indexOf(request.action) < 0)
             return fail("unsupported_action", "The control does not support this action")
         switch (request.action) {

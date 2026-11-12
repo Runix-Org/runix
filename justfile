@@ -9,27 +9,27 @@ setup:
 
 # Format Go sources in place with pinned gofumpt.
 fmt:
-    golangci-lint fmt ./...
+    GOFLAGS="-tags=devtools" golangci-lint fmt ./...
 
 # Reject non-gofumpt formatting without changing sources; print a diff.
 fmt-check:
-    golangci-lint fmt --diff ./...
+    GOFLAGS="-tags=devtools" golangci-lint fmt --diff ./...
 
 # Run Go's static checks.
 vet:
-    go vet ./...
+    GOFLAGS="-tags=devtools" go vet ./...
 
 # Run pinned linters and format checks without changing source or module files.
 lint:
-    golangci-lint run ./...
+    GOFLAGS="-tags=devtools" golangci-lint run ./...
 
 # Apply supported linter fixes; source files may change.
 lint-fix:
-    golangci-lint run --fix ./...
+    GOFLAGS="-tags=devtools" golangci-lint run --fix ./...
 
 # Run all project tests.
 test:
-    go test ./...
+    GOFLAGS="-tags=devtools" go test ./...
 
 # Check module files without rewriting go.mod or go.sum.
 mod-check:
@@ -37,11 +37,11 @@ mod-check:
 
 # Build a local binary without installing it.
 build:
-    go build .
+    GOFLAGS="-tags=devtools" go build .
 
 # Build a local release binary without debugger symbols or DWARF information.
 build-release:
-    go build -ldflags="-s -w" .
+    go build -tags='' -ldflags="-s -w" .
 
 # Build and replace the user-local executable and desktop entry.
 install: build-release
@@ -68,7 +68,7 @@ install: build-release
 
 # Run the CLI, forwarding arguments.
 run *args:
-    go run . {{args}}
+    GOFLAGS="-tags=devtools" go run . {{args}}
 
 # Run the checks required before committing; never rewrite source files.
 precommit: lint test build

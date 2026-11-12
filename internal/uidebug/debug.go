@@ -88,10 +88,9 @@ func serve(parent context.Context, conn net.Conn, handler Handler) {
 	resp := response{Version: Version, ID: req.ID}
 	if req.DeadlineMS <= started.UnixMilli() || req.DeadlineMS > started.Add(maxLifetime).UnixMilli() {
 		resp.Error = &Error{Code: "invalid_deadline", Message: "Deadline must be within two seconds."}
-	} else if req.Op != "snapshot" && req.Op != "action" {
-		resp.Error = &Error{Code: "unsupported_operation", Message: "Operation is not supported."}
-	} else if req.Op == "action" && (req.Target == "" || !validAction(req.Action, req.Text)) {
-		resp.Error = &Error{Code: "unsupported_action", Message: "Action is not supported."}
+	} else if req.Op == "" || len(req.Op) > 64 || len(req.Target) > 256 ||
+		len(req.Action) > 64 || len(req.Text) > 4096 {
+		resp.Error = &Error{Code: "invalid_request", Message: "Operation, target, action, or text exceeds its limit."}
 	} else {
 		ctx, cancel := context.WithDeadline(parent, time.UnixMilli(req.DeadlineMS))
 		readingDone := make(chan struct{})
@@ -120,21 +119,6 @@ func serve(parent context.Context, conn net.Conn, handler Handler) {
 	}
 	_ = conn.SetWriteDeadline(time.Now().Add(250 * time.Millisecond))
 	writeResponse(conn, resp)
-}
-
-func validAction(action, text string) bool {
-	switch action {
-	case "focus", "activate":
-		return text == ""
-	case "replace", "select", "scroll":
-		return len(text) <= 4096
-	case "key":
-		switch text {
-		case "Enter", "Space", "Tab", "Backtab", "Escape":
-			return true
-		}
-	}
-	return false
 }
 
 func writeResponse(conn net.Conn, resp response) {

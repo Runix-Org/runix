@@ -206,3 +206,38 @@ func (s *TransportSuite) TestPendingRequestCancellation() {
 		})
 	}
 }
+
+func (s *TransportSuite) TestCustomOperationReachesHandlerAndBoundsInput() {
+	dir := s.privateSocketDir()
+	path := filepath.Join(dir, "probe.sock")
+	received := make(chan Request, 1)
+	stop, err := Listen(path, func(_ context.Context, request Request) (json.RawMessage, *Error) {
+		received <- request
+		return json.RawMessage(`{"ok":true}`), nil
+	})
+	s.Require().NoError(err)
+	defer stop()
+	request := Request{
+		Version: Version, ID: "custom", Op: "appearance.inspect", Target: "palette",
+		Action: "readTokens", Text: "compact", DeadlineMS: time.Now().Add(time.Second).UnixMilli(),
+	}
+	send := func(req Request) *Error {
+		conn, dialErr := (&net.Dialer{}).DialContext(s.T().Context(), "unix", path)
+		s.Require().NoError(dialErr)
+		defer conn.Close()
+		encoded, marshalErr := json.Marshal(req)
+		s.Require().NoError(marshalErr)
+		_, writeErr := conn.Write(append(encoded, '\n'))
+		s.Require().NoError(writeErr)
+		var result struct {
+			Error *Error `json:"error"`
+		}
+		s.Require().NoError(json.NewDecoder(conn).Decode(&result))
+		return result.Error
+	}
+	s.Nil(send(request))
+	s.Equal(request.Op, (<-received).Op)
+	request.ID = "bounded"
+	request.Text = string(make([]byte, 4097))
+	s.Equal("invalid_request", send(request).Code)
+}

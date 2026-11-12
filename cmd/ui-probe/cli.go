@@ -3,7 +3,7 @@ package main
 import "runix/internal/uidebug"
 
 type command struct {
-	Socket   string          `required:"" help:"Connect to the enabled laboratory debug socket." placeholder:"PATH"`
+	Socket   string          `required:"" help:"Connect to an enabled UI debug socket." placeholder:"PATH"`
 	Snapshot snapshotCommand `cmd:"" help:"Read the current semantic UI snapshot."`
 	Action   actionCommand   `cmd:"" help:"Send an action to a registered UI control."`
 }

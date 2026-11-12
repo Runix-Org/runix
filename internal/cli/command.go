@@ -19,6 +19,7 @@ import (
 // Command configures product commands and instance lifecycle control.
 type Command struct {
 	commands.CLI
+	debugOptions
 	ActivationSocket          string   `help:"Use this private activation socket path." placeholder:"PATH"`
 	StartHidden               bool     `help:"Start a new instance hidden; only valid without a command."`
 	DisableDesktopIntegration bool     `help:"Disable desktop window control and Lua module setup for a new instance."`
@@ -42,8 +43,9 @@ type Command struct {
 // Run forwards to the existing primary or owns a newly elected product until it quits.
 func (command *Command) Run(parsed *kong.Context) error {
 	if strings.HasPrefix(parsed.Command(), "hotkeys ") {
-		if command.StartHidden || command.DisableDesktopIntegration || command.ActivationSocket != "" {
-			return errors.New("hotkey commands do not accept launcher startup or activation socket options")
+		if command.StartHidden || command.DisableDesktopIntegration ||
+			command.ActivationSocket != "" || command.hasDebugOption() {
+			return errors.New("hotkey commands do not accept launcher startup, activation, or debug options")
 		}
 		service, err := hotkeysettings.New()
 		if err != nil {
@@ -72,11 +74,21 @@ func (command *Command) Run(parsed *kong.Context) error {
 			return err
 		}
 	}
+	options := product.Options{ActivationSocket: endpoint}
+	if debugErr := command.applyDebugOptions(&options, bare); debugErr != nil {
+		return debugErr
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	lock, err := route(ctx, endpoint, request)
 	cancel()
-	if err != nil || lock == nil {
+	if err != nil {
 		return err
+	}
+	if lock == nil {
+		if command.hasDebugOption() {
+			return errors.New("--debug-socket cannot be forwarded to the existing instance")
+		}
+		return nil
 	}
 	defer lock.Close()
 	integration, err := desktopintegration.Detect(context.Background(), command.DisableDesktopIntegration)
@@ -86,10 +98,8 @@ func (command *Command) Run(parsed *kong.Context) error {
 	if command.StartHidden {
 		operation = ""
 	}
-	return product.Run([]string{os.Args[0]}, product.Options{
-		ActivationSocket: endpoint,
-		StartHidden:      true,
-		WindowControl:    integration.WindowControl,
-		InitialOperation: operation,
-	})
+	options.StartHidden = true
+	options.WindowControl = integration.WindowControl
+	options.InitialOperation = operation
+	return product.Run([]string{os.Args[0]}, options)
 }
