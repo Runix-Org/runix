@@ -19,9 +19,10 @@ TextField {
     selectedTextColor: runixControlStyle.selectedText
     palette.highlight: activeAppearance.surfaces.selection
     palette.highlightedText: runixControlStyle.selectedText
-    padding: 9
-    leftPadding: 11
-    rightPadding: 11
+    implicitHeight: Math.max(runixControlStyle.fieldHeight, contentHeight + topPadding + bottomPadding)
+    padding: search ? 9 : 6
+    leftPadding: search ? 11 : runixControlStyle.spacing
+    rightPadding: leftPadding
     background: Item {
         Rectangle {
             anchors.fill: parent

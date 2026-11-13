@@ -122,18 +122,30 @@ ApplicationWindow {
         ColumnLayout {
             id: appearanceControls
             Layout.fillWidth: true
+            visible: !formMode.checked
             function save(key, value) {
                 const next = Object.assign({}, activeAppearance.preferences)
                 next[key] = value
                 activeAppearance.setPreferences(next)
             }
-            RowLayout {
+            GridLayout {
                 Layout.fillWidth: true
-                Label { text: "Appearance (development)" }
+                columns: width >= runixControlStyle.formLabelWidth + runixControlStyle.formColumnGap
+                    + runixControlStyle.formControlMinWidth ? 2 : 1
+                columnSpacing: runixControlStyle.formColumnGap
+                rowSpacing: runixControlStyle.spacing
+                Label {
+                    text: "Appearance (dev)"
+                    Layout.preferredWidth: parent.columns === 2 ? runixControlStyle.formLabelWidth : -1
+                    wrapMode: Text.Wrap
+                }
                 Loader {
                     id: appearanceModeLoader
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 0
                     sourceComponent: runixComboBoxComponent
                     onLoaded: {
+                        item.Accessible.name = "Appearance mode"
                         item.model = ["System", "Light", "Dark"]
                         item.currentIndex = Qt.binding(function() {
                             return ["system", "light", "dark"].indexOf(activeAppearance.preferences.mode)
@@ -143,24 +155,14 @@ ApplicationWindow {
                         })
                     }
                 }
-                Loader {
-                    id: improveContrastLoader
-                    sourceComponent: runixCheckBoxComponent
-                    onLoaded: {
-                        item.text = "Improve contrast"
-                        item.checked = Qt.binding(function() { return activeAppearance.preferences.improve_contrast })
-                        item.clicked.connect(function() { appearanceControls.save("improve_contrast", item.checked) })
-                    }
-                }
-            }
-            RowLayout {
-                Layout.fillWidth: true
-                Label { text: "Light" }
+                Label { text: "Light theme" }
                 Loader {
                     id: lightThemeLoader
                     Layout.fillWidth: true
+                    Layout.minimumWidth: 0
                     sourceComponent: runixComboBoxComponent
                     onLoaded: {
+                        item.Accessible.name = "Light theme"
                         item.model = Qt.binding(function() { return activeAppearance.lightThemes })
                         item.textRole = "name"
                         item.currentIndex = Qt.binding(function() {
@@ -173,12 +175,14 @@ ApplicationWindow {
                         })
                     }
                 }
-                Label { text: "Dark" }
+                Label { text: "Dark theme" }
                 Loader {
                     id: darkThemeLoader
                     Layout.fillWidth: true
+                    Layout.minimumWidth: 0
                     sourceComponent: runixComboBoxComponent
                     onLoaded: {
+                        item.Accessible.name = "Dark theme"
                         item.model = Qt.binding(function() { return activeAppearance.darkThemes })
                         item.textRole = "name"
                         item.currentIndex = Qt.binding(function() {
@@ -189,6 +193,16 @@ ApplicationWindow {
                         item.activated.connect(function(index) {
                             appearanceControls.save("dark_id", item.model[index].id)
                         })
+                    }
+                }
+                Loader {
+                    id: improveContrastLoader
+                    Layout.columnSpan: parent.columns
+                    sourceComponent: runixCheckBoxComponent
+                    onLoaded: {
+                        item.text = "Improve contrast"
+                        item.checked = Qt.binding(function() { return activeAppearance.preferences.improve_contrast })
+                        item.clicked.connect(function() { appearanceControls.save("improve_contrast", item.checked) })
                     }
                 }
             }

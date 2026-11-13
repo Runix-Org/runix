@@ -72,92 +72,184 @@ Item {
                     busy: root.info.busy, status: root.info.status, errors: root.info.errors}
             }
     }
+    readonly property bool wide: scroll.availableWidth - runixControlStyle.spacing * 2
+        >= runixControlStyle.formLabelWidth + runixControlStyle.formColumnGap + runixControlStyle.formControlMinWidth
+    component FieldLabel: Label {
+        Layout.preferredWidth: root.wide ? runixControlStyle.formLabelWidth : -1
+        Layout.fillWidth: !root.wide
+        Layout.alignment: Qt.AlignTop
+        Layout.topMargin: root.wide ? runixControlStyle.spacing : 0
+        color: runixControlStyle.secondary
+        textFormat: Text.PlainText
+        wrapMode: Text.Wrap
+    }
+    component FieldError: Label {
+        Layout.fillWidth: true
+        visible: text.length > 0
+        color: runixControlStyle.error
+        textFormat: Text.PlainText
+        wrapMode: Text.Wrap
+    }
+    Shortcut {
+        sequence: "Ctrl+Return"
+        enabled: root.visible && !root.info.busy
+            && !!nameField.item && !nameField.item.inputMethodComposing
+            && !!notesField.item && !notesField.item.inputMethodComposing
+            && !!passwordField.item && !passwordField.item.inputMethodComposing
+        onActivated: root.submit()
+    }
     ScrollView {
         id: scroll
-        anchors.fill: parent
-        anchors.margins: 4
+        anchors.top: parent.top
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: footer.top
+        anchors.margins: runixControlStyle.spacing
         contentWidth: availableWidth
-        contentHeight: content.implicitHeight + 8
+        contentHeight: content.implicitHeight + runixControlStyle.spacing * 2
         clip: true
         ScrollBar.vertical: runixScrollBarComponent.createObject(null, {policy: ScrollBar.AsNeeded})
-        ColumnLayout {
+        GridLayout {
             id: content
-            x: 4; y: 4
-            width: Math.max(0, scroll.availableWidth - 8)
-            spacing: runixControlStyle.spacing
-            Label { text: "Name"; color: runixControlStyle.secondary }
-            Loader {
-                id: nameField; Layout.fillWidth: true; sourceComponent: runixTextFieldComponent
-                onLoaded: {
-                    item.placeholderText = "Name"
-                    item.errorText = Qt.binding(function() { return root.info.errors?.name || "" })
-                    item.textChanged.connect(root.edit)
-                    item.accepted.connect(function() { if (!item.inputMethodComposing) root.submit() })
-                }
-                Connections { target: nameField.item; function onActiveFocusChanged() { if (nameField.item.activeFocus) root.reveal(nameField.item) } }
-            }
-            Label { id: nameError; Layout.fillWidth: true; visible: !!root.info.errors?.name; text: "! " + (root.info.errors?.name || ""); color: runixControlStyle.error; textFormat: Text.PlainText; wrapMode: Text.Wrap }
-            Label { text: "Notes"; color: runixControlStyle.secondary }
-            Loader {
-                id: notesField; Layout.fillWidth: true; Layout.preferredHeight: 76; sourceComponent: runixTextAreaComponent
-                onLoaded: {
-                    item.placeholderText = "Notes"
-                    item.wrapMode = TextEdit.Wrap
-                    item.errorText = Qt.binding(function() { return root.info.errors?.notes || "" })
-                    item.textChanged.connect(root.edit)
-                }
-                Connections { target: notesField.item; function onActiveFocusChanged() { if (notesField.item.activeFocus) root.reveal(notesField.item) } }
-            }
-            Label { id: notesError; Layout.fillWidth: true; visible: !!root.info.errors?.notes; text: "! " + (root.info.errors?.notes || ""); color: runixControlStyle.error; textFormat: Text.PlainText; wrapMode: Text.Wrap }
-            Label { text: "Password"; color: runixControlStyle.secondary }
-            Loader {
-                id: passwordField; Layout.fillWidth: true; sourceComponent: runixTextFieldComponent
-                onLoaded: {
-                    item.placeholderText = "Password"
-                    item.echoMode = TextInput.Password
-                    item.errorText = Qt.binding(function() { return root.info.errors?.password || "" })
-                    item.textChanged.connect(root.edit)
-                    item.accepted.connect(function() { if (!item.inputMethodComposing) root.submit() })
-                }
-                Connections { target: passwordField.item; function onActiveFocusChanged() { if (passwordField.item.activeFocus) root.reveal(passwordField.item) } }
-            }
-            Label { id: passwordError; Layout.fillWidth: true; visible: !!root.info.errors?.password; text: "! " + (root.info.errors?.password || ""); color: runixControlStyle.error; textFormat: Text.PlainText; wrapMode: Text.Wrap }
-            Loader {
-                id: acceptedBox; sourceComponent: runixCheckBoxComponent
-                onLoaded: { item.text = "I accept"; item.checkedChanged.connect(root.edit) }
-                Connections { target: acceptedBox.item; function onActiveFocusChanged() { if (acceptedBox.item.activeFocus) root.reveal(acceptedBox.item) } }
-            }
-            Label { id: acceptedError; Layout.fillWidth: true; visible: !!root.info.errors?.accepted; text: "! " + (root.info.errors?.accepted || ""); color: runixControlStyle.error; textFormat: Text.PlainText; wrapMode: Text.Wrap }
-            Label { text: "Choice"; color: runixControlStyle.secondary }
-            Loader {
-                id: choiceBox; Layout.fillWidth: true; sourceComponent: runixComboBoxComponent
-                onLoaded: {
-                    item.model = ["Choose…", "Personal", "Work"]
-                    item.currentIndex = 0
-                    item.activated.connect(root.edit)
-                }
-                Connections { target: choiceBox.item; function onActiveFocusChanged() { if (choiceBox.item.activeFocus) root.reveal(choiceBox.item) } }
-            }
-            Label { id: choiceError; Layout.fillWidth: true; visible: !!root.info.errors?.choice; text: "! " + (root.info.errors?.choice || ""); color: runixControlStyle.error; textFormat: Text.PlainText; wrapMode: Text.Wrap }
-            RowLayout {
+            x: runixControlStyle.spacing
+            y: runixControlStyle.spacing
+            width: Math.max(0, scroll.availableWidth - runixControlStyle.spacing * 2)
+            columns: root.wide ? 2 : 1
+            columnSpacing: runixControlStyle.formColumnGap
+            rowSpacing: runixControlStyle.formRowSpacing
+            FieldLabel { text: "Name" }
+            ColumnLayout {
                 Layout.fillWidth: true
+                Layout.minimumWidth: 0
+                spacing: runixControlStyle.spacing
                 Loader {
-                    id: submitButton; sourceComponent: runixButtonComponent
+                    id: nameField
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 0
+                    sourceComponent: runixTextFieldComponent
                     onLoaded: {
-                        item.text = Qt.binding(function() { return root.info.busy ? "Submitting…" : "Submit" })
-                        item.busy = Qt.binding(function() { return !!root.info.busy })
-                        item.enabled = Qt.binding(function() { return !root.info.busy })
-                        item.clicked.connect(root.submit)
+                        item.Accessible.name = "Name"
+                        item.placeholderText = "Name"
+                        item.errorText = Qt.binding(function() { return root.info.errors?.name || "" })
+                        item.textChanged.connect(root.edit)
+                        item.accepted.connect(function() { if (!item.inputMethodComposing) root.submit() })
                     }
-                    Connections { target: submitButton.item; function onActiveFocusChanged() { if (submitButton.item.activeFocus) root.reveal(submitButton.item) } }
+                    Connections { target: nameField.item; function onActiveFocusChanged() { if (nameField.item.activeFocus) root.reveal(nameField.item) } }
                 }
+                FieldError { id: nameError; text: root.info.errors?.name ? "! " + root.info.errors.name : "" }
+            }
+            FieldLabel { text: "Notes" }
+            ColumnLayout {
+                Layout.fillWidth: true
+                Layout.minimumWidth: 0
+                spacing: runixControlStyle.spacing
                 Loader {
-                    id: cancelButton; sourceComponent: runixButtonComponent
-                    onLoaded: { item.text = "Cancel"; item.clicked.connect(function() { root.cancel(); root.dismissed() }) }
-                    Connections { target: cancelButton.item; function onActiveFocusChanged() { if (cancelButton.item.activeFocus) root.reveal(cancelButton.item) } }
+                    id: notesField
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 0
+                    Layout.preferredHeight: runixControlStyle.textAreaHeight
+                    sourceComponent: runixTextAreaComponent
+                    onLoaded: {
+                        item.Accessible.name = "Notes"
+                        item.placeholderText = "Notes"
+                        item.wrapMode = TextEdit.Wrap
+                        item.errorText = Qt.binding(function() { return root.info.errors?.notes || "" })
+                        item.textChanged.connect(root.edit)
+                    }
+                    Connections { target: notesField.item; function onActiveFocusChanged() { if (notesField.item.activeFocus) root.reveal(notesField.item) } }
+                }
+                FieldError { id: notesError; text: root.info.errors?.notes ? "! " + root.info.errors.notes : "" }
+            }
+            FieldLabel { text: "Password" }
+            ColumnLayout {
+                Layout.fillWidth: true
+                Layout.minimumWidth: 0
+                spacing: runixControlStyle.spacing
+                Loader {
+                    id: passwordField
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 0
+                    sourceComponent: runixTextFieldComponent
+                    onLoaded: {
+                        item.Accessible.name = "Password"
+                        item.placeholderText = "Password"
+                        item.echoMode = TextInput.Password
+                        item.errorText = Qt.binding(function() { return root.info.errors?.password || "" })
+                        item.textChanged.connect(root.edit)
+                        item.accepted.connect(function() { if (!item.inputMethodComposing) root.submit() })
+                    }
+                    Connections { target: passwordField.item; function onActiveFocusChanged() { if (passwordField.item.activeFocus) root.reveal(passwordField.item) } }
+                }
+                FieldError { id: passwordError; text: root.info.errors?.password ? "! " + root.info.errors.password : "" }
+            }
+            FieldLabel { text: "Consent" }
+            ColumnLayout {
+                Layout.fillWidth: true
+                Layout.minimumWidth: 0
+                spacing: runixControlStyle.spacing
+                Loader {
+                    id: acceptedBox
+                    sourceComponent: runixCheckBoxComponent
+                    onLoaded: { item.text = "I accept"; item.checkedChanged.connect(root.edit) }
+                    Connections { target: acceptedBox.item; function onActiveFocusChanged() { if (acceptedBox.item.activeFocus) root.reveal(acceptedBox.item) } }
+                }
+                FieldError { id: acceptedError; text: root.info.errors?.accepted ? "! " + root.info.errors.accepted : "" }
+            }
+            FieldLabel { text: "Choice" }
+            ColumnLayout {
+                Layout.fillWidth: true
+                Layout.minimumWidth: 0
+                spacing: runixControlStyle.spacing
+                Loader {
+                    id: choiceBox
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 0
+                    sourceComponent: runixComboBoxComponent
+                    onLoaded: {
+                        item.Accessible.name = "Choice"
+                        item.model = ["Choose…", "Personal", "Work"]
+                        item.currentIndex = 0
+                        item.activated.connect(root.edit)
+                    }
+                    Connections { target: choiceBox.item; function onActiveFocusChanged() { if (choiceBox.item.activeFocus) root.reveal(choiceBox.item) } }
+                }
+                FieldError { id: choiceError; text: root.info.errors?.choice ? "! " + root.info.errors.choice : "" }
+            }
+        }
+    }
+    ColumnLayout {
+        id: footer
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        anchors.margins: runixControlStyle.spacing
+        spacing: runixControlStyle.spacing
+        Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: runixControlStyle.separator }
+        RowLayout {
+            Layout.fillWidth: true
+            Loader {
+                id: submitButton
+                sourceComponent: runixButtonComponent
+                onLoaded: {
+                    item.text = Qt.binding(function() { return root.info.busy ? "Submitting…" : "Submit" })
+                    item.busy = Qt.binding(function() { return !!root.info.busy })
+                    item.enabled = Qt.binding(function() { return !root.info.busy })
+                    item.clicked.connect(root.submit)
                 }
             }
-            Label { id: statusLabel; Layout.fillWidth: true; text: root.info.status || "Ready"; textFormat: Text.PlainText; color: runixControlStyle.secondary; wrapMode: Text.Wrap }
+            Loader {
+                id: cancelButton
+                sourceComponent: runixButtonComponent
+                onLoaded: { item.text = "Cancel"; item.clicked.connect(function() { root.cancel(); root.dismissed() }) }
+            }
+        }
+        Label {
+            id: statusLabel
+            Layout.fillWidth: true
+            text: root.info.status || "Ready"
+            textFormat: Text.PlainText
+            color: runixControlStyle.secondary
+            wrapMode: Text.Wrap
         }
     }
     // Focus remains on native controls; their KeyNavigation links wrap the form.

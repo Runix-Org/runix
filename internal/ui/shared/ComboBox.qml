@@ -5,7 +5,7 @@ import QtQuick.Window
 ComboBox {
     id: control
     implicitWidth: Math.max(120, contentItem.implicitWidth + 52)
-    implicitHeight: 36
+    implicitHeight: Math.max(runixControlStyle.fieldHeight, contentItem.implicitHeight + 12)
     property Item invokingFocusItem: null
     contentItem: Text {
         leftPadding: 12
@@ -86,6 +86,8 @@ ComboBox {
         y: control.height
         width: control.width
         implicitHeight: contentItem.implicitHeight
+        margins: runixControlStyle.spacing
+        height: Math.min(implicitHeight, Math.max(0, control.Window.window.height - margins * 2))
         padding: 4
         onAboutToShow: control.invokingFocusItem = control.Window.activeFocusItem
         onClosed: {

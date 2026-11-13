@@ -332,13 +332,12 @@ ApplicationWindow {
                         x: 4
                         y: 4
                         width: Math.max(0, setupScroll.availableWidth - 8)
-                        spacing: 16
+                        spacing: runixControlStyle.formRowSpacing
                         RowLayout {
                             Layout.fillWidth: true
                             Label {
                                 text: "Hyprland integration"
-                                font.pixelSize: 18
-                                font.bold: true
+                                font.pixelSize: runixControlStyle.headingSize
                                 Layout.fillWidth: true
                             }
                             Label {
@@ -499,16 +498,12 @@ ApplicationWindow {
         Repeater {
             id: shortcutPanel
             model: shortcutState
-            delegate: ScrollView {
+            delegate: ColumnLayout {
                 id: shortcuts
-                ScrollBar.vertical: runixScrollBarComponent.createObject(null)
-                background: Item {}
                 Layout.fillWidth: true
                 Layout.fillHeight: true
+                spacing: runixControlStyle.spacing
                 visible: window.settingsOpen && !window.integrationOpen && (window.onboarding || window.settingsTab === "shortcut")
-                clip: true
-                contentWidth: availableWidth
-                contentHeight: shortcutContent.implicitHeight + 8
                 readonly property var info: JSON.parse(model.snapshot)
                 readonly property var focusControl: skipShortcut.item
                 function request(action) { model.command = JSON.stringify({action: action}) }
@@ -551,15 +546,24 @@ ApplicationWindow {
                         window.settingsOpen = false
                     }
                 }
+                ScrollView {
+                    id: shortcutScroll
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    ScrollBar.vertical: runixScrollBarComponent.createObject(null)
+                    background: Item {}
+                    clip: true
+                    contentWidth: availableWidth
+                    contentHeight: shortcutContent.implicitHeight + runixControlStyle.spacing
                 ColumnLayout {
                     id: shortcutContent
                     x: 4
                     y: 4
-                    width: Math.max(0, shortcuts.availableWidth - 8)
-                    spacing: 8
+                    width: Math.max(0, shortcutScroll.availableWidth - 8)
+                    spacing: runixControlStyle.formRowSpacing
                     Label {
                         text: window.onboarding ? "Set up your shortcut" : "Keyboard shortcut"
-                        font.pixelSize: 18
+                        font.pixelSize: runixControlStyle.headingSize
                     }
                     Label {
                         Layout.fillWidth: true
@@ -626,9 +630,17 @@ ApplicationWindow {
                         color: runixControlStyle.secondary
                         wrapMode: Text.Wrap
                     }
+                    Label {
+                        visible: !!shortcuts.info.busy
+                        text: "◌ Checking or saving shortcut..."
+                        color: runixControlStyle.loader
+                    }
+                }
+                }
+                Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: runixControlStyle.separator }
                     Flow {
                         Layout.fillWidth: true
-                        spacing: 8
+                        spacing: runixControlStyle.spacing
                         Action {
                             text: shortcuts.info.recording ? "Cancel recording" : "Record shortcut"
                             enabled: shortcuts.info.recording || (!shortcuts.info.busy && shortcuts.info.available)
@@ -668,12 +680,6 @@ ApplicationWindow {
                             }
                         }
                     }
-                    Label {
-                        visible: !!shortcuts.info.busy
-                        text: "◌ Checking or saving shortcut..."
-                        color: runixControlStyle.loader
-                    }
-                }
             }
         }
         Repeater {

@@ -48,6 +48,18 @@ QtObject {
     readonly property int radius: 5
     readonly property int spacing: 8
 
+    // Logical units; Qt's existing interface scale applies exactly once.
+    readonly property int contentInset: 16
+    readonly property int formLabelWidth: 120
+    readonly property int formControlMinWidth: 280
+    readonly property int formColumnGap: 16
+    readonly property int formRowSpacing: 12
+    readonly property int fieldHeight: 30
+    readonly property int textAreaHeight: 76
+    readonly property int headingSize: 18
+    readonly property int titleSize: 20
+    readonly property int sectionSpacing: 24
+
     function foreground(control) { return control.enabled ? text : disabled }
 
     function focusVisible(control) { return control.visualFocus }

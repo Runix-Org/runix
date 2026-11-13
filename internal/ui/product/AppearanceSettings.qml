@@ -18,6 +18,33 @@ ScrollView {
         }
     }
     function focusScale() { if (scaleBox.item) scaleBox.item.forceActiveFocus() }
+    component FieldRow: GridLayout {
+        id: row
+        property string label: ""
+        default property alias fields: fieldColumn.data
+        Layout.fillWidth: true
+        Layout.minimumWidth: 0
+        columns: width >= runixControlStyle.formLabelWidth + runixControlStyle.formColumnGap
+            + runixControlStyle.formControlMinWidth ? 2 : 1
+        columnSpacing: runixControlStyle.formColumnGap
+        rowSpacing: runixControlStyle.spacing
+        Label {
+            text: row.label
+            textFormat: Text.PlainText
+            color: runixControlStyle.secondary
+            wrapMode: Text.Wrap
+            Layout.preferredWidth: row.columns === 2 ? runixControlStyle.formLabelWidth : -1
+            Layout.fillWidth: row.columns === 1
+            Layout.alignment: Qt.AlignTop
+            Layout.topMargin: row.columns === 2 ? runixControlStyle.spacing : 0
+        }
+        ColumnLayout {
+            id: fieldColumn
+            Layout.fillWidth: true
+            Layout.minimumWidth: 0
+            spacing: runixControlStyle.spacing
+        }
+    }
     component ThemePreview: Pane {
         id: themePreview
         required property var theme
@@ -109,19 +136,21 @@ ScrollView {
         id: content
         x: 4; y: 4
         width: Math.max(0, root.availableWidth - 8)
-        spacing: 12
-        Label { text: "Appearance"; font.pixelSize: 18; font.bold: true }
+        spacing: runixControlStyle.formRowSpacing
+        Label { text: "Appearance"; font.pixelSize: runixControlStyle.headingSize; font.bold: true }
         Label {
             text: "Choose how runix looks. Light and dark themes are saved separately."
             color: runixControlStyle.secondary
             wrapMode: Text.Wrap
             Layout.fillWidth: true
         }
-        Label { text: "Interface scale"; color: runixControlStyle.secondary }
+        FieldRow {
+            label: "Interface scale"
         Loader {
             id: scaleBox
             objectName: "settings-interface-scale"
             Layout.fillWidth: true
+            Layout.minimumWidth: 0
             sourceComponent: runixComboBoxComponent
             onLoaded: {
                 item.model = root.scaleChoices.map(function(percent) { return percent + "%" })
@@ -159,12 +188,15 @@ ScrollView {
             textFormat: Text.PlainText
             wrapMode: Text.Wrap
         }
-        Label { text: "Mode"; color: runixControlStyle.secondary }
+        }
+        FieldRow {
+            label: "Mode"
         Loader {
             id: modeBox
             Layout.fillWidth: true
             sourceComponent: runixComboBoxComponent
             onLoaded: {
+                item.Accessible.name = "Mode"
                 item.model = ["System", "Light", "Dark"]
                 item.currentIndex = ({system: 0, light: 1, dark: 2})[root.appearance.preferences.mode || "system"] ?? 0
                 item.activated.connect(function(index) {
@@ -175,10 +207,13 @@ ScrollView {
                 })
             }
         }
-        Label { text: "Light theme"; color: runixControlStyle.secondary }
+        }
+        FieldRow {
+            label: "Light theme"
         Loader {
             id: lightBox; Layout.fillWidth: true; sourceComponent: runixComboBoxComponent
             onLoaded: {
+                item.Accessible.name = "Light theme"
                 refresh()
                 item.activated.connect(function(index) {
                     const themes = root.appearance.lightThemes
@@ -196,10 +231,13 @@ ScrollView {
                 function onRevisionChanged() { lightBox.refresh(); darkBox.refresh() }
             }
         }
-        Label { text: "Dark theme"; color: runixControlStyle.secondary }
+        }
+        FieldRow {
+            label: "Dark theme"
         Loader {
             id: darkBox; Layout.fillWidth: true; sourceComponent: runixComboBoxComponent
             onLoaded: {
+                item.Accessible.name = "Dark theme"
                 refresh()
                 item.activated.connect(function(index) {
                     const themes = root.appearance.darkThemes
@@ -212,6 +250,7 @@ ScrollView {
                 item.model = root.appearance.darkThemes.map(function(theme) { return root.label(theme) })
                 item.currentIndex = root.selected(root.appearance.darkThemes, root.appearance.preferences.dark_id)
             }
+        }
         }
         ThemePreview {
             theme: root.selectedTheme(root.appearance.lightThemes, root.appearance.preferences.light_id)
@@ -285,6 +324,7 @@ ScrollView {
             id: status; Layout.fillWidth: true; visible: text.length > 0
             color: runixControlStyle.error; textFormat: Text.PlainText; wrapMode: Text.Wrap
         }
+        Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: runixControlStyle.separator }
         Label { text: "Import a theme"; font.bold: true }
         Label {
             Layout.fillWidth: true
@@ -293,13 +333,14 @@ ScrollView {
             color: runixControlStyle.secondary
             wrapMode: Text.Wrap
         }
-        Label { text: "Original JSON"; color: runixControlStyle.secondary }
+        FieldRow {
+            label: "Original JSON"
         Loader {
             id: jsonInput
             Layout.fillWidth: true
-            Layout.preferredHeight: 110
+            Layout.preferredHeight: runixControlStyle.textAreaHeight
             sourceComponent: runixTextAreaComponent
-            onLoaded: item.placeholderText = "Paste original theme JSON"
+            onLoaded: { item.Accessible.name = "Original JSON"; item.placeholderText = "Paste original theme JSON" }
         }
         RowLayout {
             Layout.fillWidth: true
@@ -313,12 +354,14 @@ ScrollView {
                 }
             }
         }
-        Label { text: "Local JSON file path"; color: runixControlStyle.secondary }
+        }
+        FieldRow {
+            label: "Local JSON file path"
         Loader {
             id: filePath
             Layout.fillWidth: true
             sourceComponent: runixTextFieldComponent
-            onLoaded: item.placeholderText = "Local absolute file path"
+            onLoaded: { item.Accessible.name = "Local JSON file path"; item.placeholderText = "Local absolute file path" }
         }
         Loader {
             id: fileButton; sourceComponent: runixButtonComponent
@@ -326,6 +369,7 @@ ScrollView {
                 item.text = "Import file"
                 item.clicked.connect(function() { root.appearance.importFile(filePath.item.text) })
             }
+        }
         }
         Label {
             Layout.fillWidth: true
