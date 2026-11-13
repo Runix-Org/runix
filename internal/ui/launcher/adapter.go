@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -34,6 +35,7 @@ type Adapter struct {
 	previous     client
 	activeCancel context.CancelFunc
 	beforeShow   func()
+	navigation   func(string) bool
 	operations   chan queuedOperation
 	onError      func(error)
 	queueMu      sync.Mutex
@@ -48,6 +50,11 @@ type queuedOperation struct {
 // SetBeforeShow installs a GUI-thread hook called before a hidden window is shown.
 func (a *Adapter) SetBeforeShow(hook func()) {
 	a.beforeShow = hook
+}
+
+// SetNavigationHandler installs the GUI-thread settings navigation hook.
+func (a *Adapter) SetNavigationHandler(handler func(string) bool) {
+	a.navigation = handler
 }
 
 // HideAfterLaunch synchronously hides without restoring the previously focused client.
@@ -299,8 +306,11 @@ func (a *Adapter) gui(ctx context.Context, command string) (bool, error) {
 
 // Handle accepts one operation at a time; callers never wait for a previous request.
 func (a *Adapter) Handle(parent context.Context, command string) error {
-	if command != "show" && command != "hide" && command != "toggle" {
+	if !isActivationCommand(command) && !isSettingsCommand(command) {
 		return errors.New("unknown activation command")
+	}
+	if isSettingsCommand(command) && a.navigation == nil {
+		return errors.New("settings navigation is unavailable")
 	}
 	ctx, cancel := context.WithTimeout(parent, 2*time.Second)
 	a.previousMu.Lock()
@@ -320,7 +330,24 @@ func (a *Adapter) Handle(parent context.Context, command string) error {
 	return a.handle(ctx, command)
 }
 
+func isActivationCommand(command string) bool {
+	return command == "show" || command == "hide" || command == "toggle"
+}
+
+func isSettingsCommand(command string) bool {
+	return command == "settings" || strings.HasPrefix(command, "settings:")
+}
+
 func (a *Adapter) handle(parent context.Context, command string) error {
+	destination := command
+	settings := isSettingsCommand(destination)
+	if settings && destination != "settings" && destination != "settings:appearance" &&
+		destination != "settings:shortcut" {
+		return fmt.Errorf("settings destination %q is unavailable", destination)
+	}
+	if settings {
+		command = "show"
+	}
 	ctx, cancel := context.WithCancel(parent)
 	defer cancel()
 	stop := context.AfterFunc(a.ctx, cancel)
@@ -351,7 +378,12 @@ func (a *Adapter) handle(parent context.Context, command string) error {
 			return err
 		}
 		if a.hyprland {
-			return focusOwn(ctx)
+			if err = focusOwn(ctx); err != nil {
+				return err
+			}
+		}
+		if settings {
+			return a.navigate(ctx, navigationDestination(destination))
 		}
 		return nil
 	}
@@ -369,4 +401,30 @@ func (a *Adapter) handle(parent context.Context, command string) error {
 		return restoreFocus(ctx, previous)
 	}
 	return nil
+}
+
+func (a *Adapter) navigate(ctx context.Context, section string) error {
+	done := make(chan bool, 1)
+	mainthread.Start(func() {
+		if a.stopped.Load() || ctx.Err() != nil {
+			return
+		}
+		done <- a.navigation(section)
+	})
+	select {
+	case ok := <-done:
+		if !ok {
+			return fmt.Errorf("settings section %q is unavailable", section)
+		}
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func navigationDestination(operation string) string {
+	if operation == "settings" {
+		return "settings"
+	}
+	return strings.TrimPrefix(operation, "settings:")
 }

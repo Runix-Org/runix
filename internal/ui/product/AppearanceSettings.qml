@@ -5,6 +5,19 @@ import QtQuick.Layouts
 ScrollView {
     id: root
     property var appearance: activeAppearance
+    property var scaleInfo: ({percent: 100, error: "", busy: false})
+    property real selectedScale: scaleInfo.percent
+    readonly property var scaleChoices: Array.from({length: 26}, function(_, index) { return 75 + index * 5 })
+    Repeater {
+        id: scaleCommands
+        model: interfaceScaleState
+        delegate: Item {
+            readonly property var info: JSON.parse(model.snapshot)
+            onInfoChanged: root.scaleInfo = info
+            function apply(percent) { model.command = percent }
+        }
+    }
+    function focusScale() { if (scaleBox.item) scaleBox.item.forceActiveFocus() }
     component ThemePreview: Pane {
         id: themePreview
         required property var theme
@@ -81,11 +94,11 @@ ScrollView {
         })
     }
     Component.onCompleted: {
-        const order = [modeBox.item, lightBox.item, darkBox.item, improveBox.item,
+        const order = [scaleBox.item, scaleApply.item, modeBox.item, lightBox.item, darkBox.item, improveBox.item,
             jsonInput.item, pasteButton.item, filePath.item, fileButton.item]
         for (let i = 0; i < order.length; ++i) {
             const control = order[i]
-            prepare(control, i < 3)
+            prepare(control, [scaleBox.item, modeBox.item, lightBox.item, darkBox.item].includes(control))
             control.KeyNavigation.priority = KeyNavigation.BeforeItem
             control.KeyNavigation.tab = order[(i + 1) % order.length]
             control.KeyNavigation.backtab = order[(i + order.length - 1) % order.length]
@@ -103,6 +116,48 @@ ScrollView {
             color: runixControlStyle.secondary
             wrapMode: Text.Wrap
             Layout.fillWidth: true
+        }
+        Label { text: "Interface scale"; color: runixControlStyle.secondary }
+        Loader {
+            id: scaleBox
+            objectName: "settings-interface-scale"
+            Layout.fillWidth: true
+            sourceComponent: runixComboBoxComponent
+            onLoaded: {
+                item.model = root.scaleChoices.map(function(percent) { return percent + "%" })
+                item.currentIndex = Qt.binding(function() { return root.scaleChoices.indexOf(root.selectedScale) })
+                item.displayText = Qt.binding(function() { return Number(root.selectedScale.toFixed(2)) + "%" })
+                item.enabled = Qt.binding(function() { return !root.scaleInfo.busy })
+                item.Accessible.name = "Interface scale"
+                item.activated.connect(function(index) { root.selectedScale = root.scaleChoices[index] })
+            }
+        }
+        Label {
+            Layout.fillWidth: true
+            text: "Changes the window and interface size. Apply restarts runix and returns to Appearance."
+            color: runixControlStyle.secondary
+            wrapMode: Text.Wrap
+        }
+        Loader {
+            id: scaleApply
+            objectName: "settings-scale-apply"
+            sourceComponent: runixButtonComponent
+            onLoaded: {
+                item.text = "Apply and restart"
+                item.enabled = Qt.binding(function() {
+                    return !root.scaleInfo.busy && root.scaleChoices.includes(root.selectedScale)
+                        && root.selectedScale !== root.scaleInfo.percent
+                })
+                item.clicked.connect(function() { scaleCommands.itemAt(0).apply(root.selectedScale) })
+            }
+        }
+        Label {
+            Layout.fillWidth: true
+            text: root.scaleInfo.error
+            visible: text.length > 0
+            color: runixControlStyle.text
+            textFormat: Text.PlainText
+            wrapMode: Text.Wrap
         }
         Label { text: "Mode"; color: runixControlStyle.secondary }
         Loader {

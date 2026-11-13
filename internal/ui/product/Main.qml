@@ -75,6 +75,38 @@ ApplicationWindow {
         window.shortcutRequest("refresh")
         return true
     }
+    property string pendingSettingsRoute: ""
+    property bool focusScaleOnLoad: false
+    function requestSettingsRoute(section) {
+        if (!["settings", "appearance", "shortcut"].includes(section) || window.shortcutInfo.recording)
+            return false
+        if (window.shortcutStartupResolved && (window.onboarding || window.integrationOpen)) return false
+        pendingSettingsRoute = section === "settings" ? "appearance" : section
+        applySettingsRoute()
+        return true
+    }
+    function applySettingsRoute() {
+        if (!pendingSettingsRoute || !integrationStartupResolved || !shortcutStartupResolved
+                || integrationOpen || onboarding) return
+        const section = pendingSettingsRoute
+        pendingSettingsRoute = ""
+        shortcutRequest("cancel")
+        settingsTab = section
+        focusScaleOnLoad = section === "appearance"
+        settingsOpen = true
+        integrationPanel.itemAt(0).request("refresh")
+        shortcutRequest("refresh")
+        Qt.callLater(function() {
+            if (section === "appearance" && appearanceSettings.item) {
+                focusScaleOnLoad = false
+                appearanceSettings.item.focusScale()
+            }
+        })
+    }
+    onIntegrationStartupResolvedChanged: Qt.callLater(window.applySettingsRoute)
+    onShortcutStartupResolvedChanged: Qt.callLater(window.applySettingsRoute)
+    onIntegrationOpenChanged: Qt.callLater(window.applySettingsRoute)
+    onOnboardingChanged: Qt.callLater(window.applySettingsRoute)
     function backFromSettings() {
         if (!window.onboarding) window.searchResetSignal++
         window.settingsOpen = false
@@ -115,6 +147,7 @@ ApplicationWindow {
     }
     Component.onCompleted: {
         const geometry = geometryCommands.itemAt(0).info
+        windowPolicy.compositorPlacement = geometry.compositor_placement
         windowPolicy.savedSize = Qt.size(geometry.width, geometry.height)
         windowPolicy.attach(window)
         launcher.window = window
@@ -249,10 +282,17 @@ ApplicationWindow {
         }
         Loader {
             id: appearanceSettings
+            objectName: "settings-appearance-panel"
             Layout.fillWidth: true
             Layout.fillHeight: true
             visible: window.settingsOpen && !window.onboarding && !window.integrationOpen && window.settingsTab === "appearance"
             sourceComponent: visible ? runixAppearanceSettingsComponent : null
+            onLoaded: {
+                if (window.focusScaleOnLoad) {
+                    window.focusScaleOnLoad = false
+                    Qt.callLater(function() { if (appearanceSettings.item) appearanceSettings.item.focusScale() })
+                }
+            }
         }
         Repeater {
             id: integrationPanel
@@ -438,6 +478,7 @@ ApplicationWindow {
                     }
                     Item { Layout.fillWidth: true }
                     Action {
+                        objectName: "integration-continue"
                         text: setup.info.available ? "Continue" : "Not now"
                         primary: true
                         onClicked: {

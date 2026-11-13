@@ -96,10 +96,11 @@ func (g *geometryState) install(engine *qml.QQmlApplicationEngine) {
 			return qt.NewQVariant()
 		}
 		data, _ := json.Marshal(struct {
-			Width  int `json:"width"`
-			Height int `json:"height"`
-			Reset  int `json:"reset"`
-		}{g.initialWidth, g.initialHeight, resetRevision})
+			Width               int  `json:"width"`
+			Height              int  `json:"height"`
+			Reset               int  `json:"reset"`
+			CompositorPlacement bool `json:"compositor_placement"`
+		}{g.initialWidth, g.initialHeight, resetRevision, g.hyprland})
 		return qt.NewQVariant14(string(data))
 	})
 	g.publish = func() {

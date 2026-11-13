@@ -33,20 +33,45 @@ Item {
         return semanticDebug.controls[name]
     }
 
+    function registerScaleControls() {
+        if (!control("settings-interface-scale")) return
+        const scale = register("settings-interface-scale", "combobox", "Interface scale", ["focus"])
+        scale.readValue = function() { return control("settings-interface-scale").displayText }
+        register("settings-scale-apply", "button", "Apply and restart", ["focus", "activate"], function() {
+            control("settings-scale-apply").clicked()
+        })
+    }
+    Connections {
+        id: appearanceChanges
+        target: debug.find("settings-appearance-panel", window.contentItem)
+        function onLoaded() { debug.registerScaleControls() }
+        function onItemChanged() {
+            if (!appearanceChanges.target.item) {
+                delete semanticDebug.controls["settings-interface-scale"]
+                delete semanticDebug.controls["settings-scale-apply"]
+            }
+        }
+    }
+
     Component.onCompleted: {
         semanticDebug.window = window
         semanticDebug.windowID = "runix"
         semanticDebug.inspectWindow = function() {
             const results = control("search-results")
+            const appearance = control("settings-appearance-panel")
             return {screen: window.integrationOpen ? "integration" : window.onboarding ? "onboarding"
                         : window.settingsOpen ? "settings" : "search",
                     ready: window.integrationStartupResolved && window.shortcutStartupResolved,
                     search: results ? results.inspect() : null,
                     rendering: {frames: frames, frame_swapped: frames > 0, requests: frameRequests,
                                 renderer_api: debug.GraphicsInfo.api},
-                    settings: {tab: window.settingsTab}}
+                    settings: {tab: window.settingsTab,
+                               interface_scale: appearance && appearance.scaleInfo ? appearance.scaleInfo : null}}
         }
         register("search-query", "textbox", "Search applications and commands", ["focus", "replace", "select"])
+        register("integration-continue", "button", "Continue without changing integration", ["focus", "activate"], function() {
+            control("integration-continue").clicked()
+        })
         const results = register("search-results", "list", "Search results", ["focus", "select"])
         results.inspect = function() { return control("search-results").inspect() }
         results.select = function(text) {

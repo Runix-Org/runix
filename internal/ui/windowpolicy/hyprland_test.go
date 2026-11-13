@@ -10,6 +10,7 @@ import (
 	"time"
 
 	qt "github.com/mappu/miqt/qt6"
+	"github.com/mappu/miqt/qt6/qml"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -55,4 +56,38 @@ func (s *SizeSuite) TestWaitsForOwnMappedWindow() {
 	s.Require().NoError(waitForMapping(ctx))
 	_, err := os.Stat(mapped)
 	s.NoError(err, "must not accept an unmapped window or another process's mapped window")
+}
+
+func (s *SizeSuite) TestCompositorOwnsScreenClampWithoutLimitingInteractiveSize() {
+	s.T().Setenv("QT_QPA_PLATFORM", "offscreen")
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	app := qt.NewQApplication([]string{"runix-policy-test"})
+	defer app.Delete()
+	engine := qml.NewQQmlApplicationEngine()
+	defer engine.Delete()
+	s.Require().NoError(Install(engine))
+	engine.LoadData([]byte(`import QtQuick
+import QtQuick.Window
+Window {
+    Component.onCompleted: {
+        windowPolicy.compositorPlacement = true
+        windowPolicy.savedSize = Qt.size(1600, 1200)
+        windowPolicy.attach(this)
+    }
+}`))
+	s.Require().Len(engine.RootObjects(), 1)
+	root := engine.RootObjects()[0]
+	check := func(source string) {
+		expression := qml.NewQQmlExpression2(engine.RootContext(), root, source)
+		defer expression.Delete()
+		value := expression.Evaluate()
+		runtime.SetFinalizer(value, nil)
+		defer value.Delete()
+		s.Require().False(expression.HasError())
+		s.True(value.ToBool(), source)
+	}
+	check("width === 1600 && height === 1200 && maximumWidth > 1600 && maximumHeight > 1200")
+	check(`windowPolicy.compositorPlacement = false;
+        width <= windowPolicy.availableWidth && height <= windowPolicy.availableHeight`)
 }

@@ -13,3 +13,7 @@ func (*Command) hasDebugOption() bool {
 func (*Command) applyDebugOptions(*product.Options, bool) error {
 	return nil
 }
+
+func (*Command) appendDebugRestartArgs(args []string) []string {
+	return args
+}

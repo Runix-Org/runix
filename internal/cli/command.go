@@ -75,7 +75,7 @@ func (command *Command) Run(parsed *kong.Context) error {
 		}
 	}
 	options := product.Options{ActivationSocket: endpoint}
-	if debugErr := command.applyDebugOptions(&options, bare); debugErr != nil {
+	if debugErr := command.applyDebugOptions(&options, bare || request.Kind == "cmd"); debugErr != nil {
 		return debugErr
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -101,5 +101,13 @@ func (command *Command) Run(parsed *kong.Context) error {
 	options.StartHidden = true
 	options.WindowControl = integration.WindowControl
 	options.InitialOperation = operation
-	return product.Run([]string{os.Args[0]}, options)
+	restart := newRestartPlan(command, endpoint)
+	options.Scale = restart.scaleOptions()
+	if runErr := product.Run([]string{os.Args[0]}, options); runErr != nil {
+		return runErr
+	}
+	if restart.requested {
+		return restart.execute()
+	}
+	return nil
 }

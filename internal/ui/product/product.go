@@ -44,6 +44,7 @@ type Options struct {
 	StartHidden      bool
 	WindowControl    bool
 	InitialOperation string
+	Scale            ScaleOptions
 }
 
 // Run owns the GUI thread and startup scan until explicit Quit or native close.
@@ -69,6 +70,7 @@ func Run(args []string, options Options) error {
 	qt.QGuiApplication_SetQuitOnLastWindowClosed(false)
 	engine := qml.NewQQmlApplicationEngine()
 	geometry.install(engine)
+	installScale(engine, options.Scale, notificationService)
 	appearance, appearanceErr := appearanceview.Install(engine)
 	if appearanceErr != nil {
 		engine.Delete()
@@ -316,6 +318,23 @@ func Run(args []string, options Options) error {
 			return false
 		}
 		return value.ToBool()
+	})
+	lifecycle.SetNavigationHandler(func(section string) bool {
+		if stopped {
+			return false
+		}
+		switch section {
+		case "settings", "appearance", "shortcut":
+		default:
+			return false
+		}
+		expression := qml.NewQQmlExpression2(engine.RootContext(), root,
+			fmt.Sprintf("requestSettingsRoute(%q)", section))
+		defer expression.Delete()
+		value := expression.Evaluate()
+		runtime.SetFinalizer(value, nil)
+		defer value.Delete()
+		return !expression.HasError() && value.ToBool()
 	})
 	if options.InitialOperation != "" {
 		if queueErr := lifecycle.Enqueue(options.InitialOperation); queueErr != nil {

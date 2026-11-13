@@ -2,6 +2,7 @@
 
 import base64
 import hashlib
+import json
 import os
 from pathlib import Path
 import signal
@@ -159,7 +160,7 @@ class ProductSession:
     def _geometry(self):
         width, height = GEOMETRIES[self.geometry]
         selector = json.dumps(self.selector)
-        command("hyprctl", "dispatch", "hl.dsp.window.float({window=" + selector + ",action='enable'})")
+        command("hyprctl", "dispatch", "hl.dsp.window.float({window=" + selector + ",action='set'})")
         command("hyprctl", "dispatch", "hl.dsp.window.resize({window=" + selector
                 + f",x={width},y={height},relative=false" + "})")
         command("hyprctl", "dispatch", "hl.dsp.window.center({window=" + selector + "})")

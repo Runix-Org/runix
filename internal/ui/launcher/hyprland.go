@@ -14,6 +14,7 @@ import (
 type client struct {
 	Address   string `json:"address"`
 	PID       int    `json:"pid"`
+	Mapped    bool   `json:"mapped"`
 	Workspace struct {
 		ID int `json:"id"`
 	} `json:"workspace"`
@@ -61,12 +62,13 @@ func focusOwn(ctx context.Context) error {
 			return err
 		}
 		for _, c := range clients {
-			if c.PID == os.Getpid() {
+			if c.PID == os.Getpid() && c.Mapped {
 				return evaluate(ctx, fmt.Sprintf(
-					`local s=hl.get_active_workspace(); `+
-						`hl.dispatch(hl.dsp.window.move({window="pid:%d",workspace=s,follow=false})); `+
-						`hl.dispatch(hl.dsp.window.center({window="pid:%d"})); `+
-						`hl.dispatch(hl.dsp.focus({window="pid:%d"}))`, os.Getpid(), os.Getpid(), os.Getpid(),
+					`local w=hl.get_window("pid:%d"); local s=hl.get_active_workspace(); `+
+						`if not w or not w.mapped then error("runix window is not mapped") end; `+
+						`if s and (not w.workspace or w.workspace.id~=s.id) then `+
+						`hl.dispatch(hl.dsp.window.move({window=w,workspace=s,follow=false})) end; `+
+						`hl.dispatch(hl.dsp.focus({window=w}))`, os.Getpid(),
 				))
 			}
 		}
