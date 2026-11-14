@@ -72,6 +72,14 @@ local function initialize(options)
         error("on_ready must be a function")
     end
 
+    hl.window_rule({
+        name = "runix-window",
+        match = { class = "^runix$" },
+        float = true,
+        fullscreen_state = "0 0",
+        suppress_event = "fullscreen maximize",
+    })
+
     local module = {
         _active = true,
         epoch = epoch_value(),

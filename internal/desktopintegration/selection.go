@@ -67,6 +67,7 @@ func probeHyprland(ctx context.Context) error {
 	code := `assert(type(hl.get_windows)=="function" and type(hl.get_window)=="function" ` +
 		`and type(hl.get_active_window)=="function" and type(hl.get_active_workspace)=="function" ` +
 		`and type(hl.dsp.window.float)=="function" and type(hl.dsp.window.resize)=="function" ` +
+		`and type(hl.dsp.window.fullscreen_state)=="function" ` +
 		`and type(hl.dsp.window.move)=="function" and type(hl.dsp.window.center)=="function" ` +
 		`and type(hl.dsp.focus)=="function", "Hyprland Lua window control is not available")`
 	output, err := exec.CommandContext(ctx, "hyprctl", "eval", code).CombinedOutput()

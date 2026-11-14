@@ -14,11 +14,14 @@ import (
 )
 
 type geometryClient struct {
-	PID     int    `json:"pid"`
-	Mapped  bool   `json:"mapped"`
-	At      [2]int `json:"at"`
-	Size    [2]int `json:"size"`
-	Monitor int    `json:"monitor"`
+	PID              int    `json:"pid"`
+	Mapped           bool   `json:"mapped"`
+	Floating         bool   `json:"floating"`
+	Fullscreen       int    `json:"fullscreen"`
+	FullscreenClient int    `json:"fullscreenClient"`
+	At               [2]int `json:"at"`
+	Size             [2]int `json:"size"`
+	Monitor          int    `json:"monitor"`
 }
 
 type geometryMonitor struct {
@@ -56,6 +59,7 @@ func stableGeometry(ctx context.Context, readQt func(context.Context) ([2]int, e
 	*geometryClient, [2]int, error,
 ) {
 	var previousNative, previousQt [2]int
+	prepared := false
 	ticker := time.NewTicker(20 * time.Millisecond)
 	defer ticker.Stop()
 	for {
@@ -64,6 +68,22 @@ func stableGeometry(ctx context.Context, readQt func(context.Context) ([2]int, e
 			return nil, [2]int{}, err
 		}
 		if client != nil && client.Size[0] > 0 && client.Size[1] > 0 {
+			if !prepared {
+				// Normalize before measuring: fullscreen dimensions are not the floating Qt/compositor ratio.
+				code := fmt.Sprintf(`local w=hl.get_window("pid:%d"); `+
+					`if not w or not w.mapped then error("runix window is not mapped") end; `+
+					`hl.dispatch(hl.dsp.window.fullscreen_state(`+
+					`{action="set",internal=0,client=0,layout_aware=false,window=w})); `+
+					`hl.dispatch(hl.dsp.window.float({action="enable",window=w}))`, os.Getpid())
+				if err := evaluateGeometry(ctx, code); err != nil {
+					return nil, [2]int{}, err
+				}
+				prepared = true
+				continue
+			}
+		}
+		if client != nil && client.Floating && client.Fullscreen == 0 && client.FullscreenClient == 0 &&
+			client.Size[0] > 0 && client.Size[1] > 0 {
 			qtSize, sizeErr := readQt(ctx)
 			if sizeErr != nil {
 				return nil, [2]int{}, sizeErr
@@ -117,11 +137,14 @@ func placeGeometry(parent context.Context, request geometryRequest, saved *usage
 	x, y, width, height := restoredBounds(saved, monitors, *current, width, height)
 	code := fmt.Sprintf(`local w=hl.get_window("pid:%d"); `+
 		`if not w or not w.mapped then error("runix window is not mapped") end; `+
-		`hl.dispatch(hl.dsp.window.float({action="set",window=w})); `+
 		`hl.dispatch(hl.dsp.window.resize({x=%d,y=%d,relative=false,window=w})); `+
 		`hl.dispatch(hl.dsp.window.move({x=%d,y=%d,relative=false,window=w}))`,
 		os.Getpid(), width, height, x, y)
-	output, err = exec.CommandContext(ctx, "hyprctl", "eval", code).CombinedOutput()
+	return evaluateGeometry(ctx, code)
+}
+
+func evaluateGeometry(ctx context.Context, code string) error {
+	output, err := exec.CommandContext(ctx, "hyprctl", "eval", code).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("set Hyprland geometry: %w: %s", err, strings.TrimSpace(string(output)))
 	}

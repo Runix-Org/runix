@@ -32,6 +32,7 @@ const persistentModuleScenario = `
 local timers, events, commands, objects = {}, {}, {}, {}
 hl = {
     dsp = {},
+    window_rule = function() return {} end,
     on = function(event, callback) events[event] = callback; return {} end,
     exec_cmd = function(command) commands[#commands + 1] = command end,
     timer = function(callback, options)
