@@ -165,6 +165,7 @@ func Discover(ctx context.Context, config CatalogConfig, generation uint64) (*Sn
 }
 
 func executable(path string) bool {
+	// #nosec G703 -- desktop entries intentionally select executable paths; no restricted root applies.
 	info, err := os.Stat(path)
 	return err == nil && info.Mode().IsRegular() && info.Mode().Perm()&0o111 != 0
 }

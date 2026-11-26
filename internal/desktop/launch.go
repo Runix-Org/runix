@@ -9,19 +9,16 @@ import (
 	"syscall"
 )
 
-// Launch starts a parsed non-D-Bus entry using an explicit session environment
+// launchExec starts a parsed non-D-Bus entry using an explicit session environment
 // (normally os.Environ()). Success means Start succeeded, not application readiness.
 // The caller owns a bounded handoff context and catalog generation validation.
 // No child is joined at shutdown; a background waiter reaps each direct child.
-func Launch(ctx context.Context, entry Entry, environment []string) error {
+func launchExec(ctx context.Context, entry Entry, environment []string) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 	if entry.DBusActivatable {
-		return fmt.Errorf("D-Bus application activation is not supported yet")
-	}
-	if entry.Disposition != Visible || entry.Type != "Application" {
-		return fmt.Errorf("selected desktop entry is not a visible application")
+		return fmt.Errorf("D-Bus applications must use Launcher.Launch")
 	}
 	argv, err := CompileExec(entry)
 	if err != nil {

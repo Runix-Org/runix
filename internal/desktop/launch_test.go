@@ -38,7 +38,7 @@ func init() {
 			}
 		}
 		entry := Entry{Type: "Application", Exec: ExecValue{Decoded: `"` + binary + `" child`}}
-		if Launch(context.Background(), entry, environment) != nil {
+		if launchExec(context.Background(), entry, environment) != nil {
 			os.Exit(6)
 		}
 		// #nosec G703 -- private fixture marker supplied by the parent test.
@@ -78,11 +78,13 @@ func init() {
 	}
 }
 
-type LaunchSuite struct{ suite.Suite }
+type launchFixtures struct{ suite.Suite }
+
+type LaunchSuite struct{ launchFixtures }
 
 func TestLaunchSuite(t *testing.T) { suite.Run(t, new(LaunchSuite)) }
 
-func (s *LaunchSuite) fixture() (Entry, []string, string, string) {
+func (s *launchFixtures) fixture() (Entry, []string, string, string) {
 	directory := s.T().TempDir()
 	binary, err := os.Executable()
 	s.Require().NoError(err)
@@ -105,7 +107,7 @@ func (s *LaunchSuite) fixture() (Entry, []string, string, string) {
 	return entry, environment, report, release
 }
 
-func (s *LaunchSuite) capture(path string) launchReport {
+func (s *launchFixtures) capture(path string) launchReport {
 	var report launchReport
 	s.Require().Eventually(func() bool {
 		data, err := os.ReadFile(path)
@@ -114,7 +116,7 @@ func (s *LaunchSuite) capture(path string) launchReport {
 	return report
 }
 
-func (s *LaunchSuite) finish(report launchReport, release string) {
+func (s *launchFixtures) finish(report launchReport, release string) {
 	s.Require().NoError(os.WriteFile(release, nil, 0o600))
 	s.Require().Eventually(func() bool {
 		_, err := os.Stat("/proc/" + strconv.Itoa(report.PID))
@@ -125,7 +127,7 @@ func (s *LaunchSuite) finish(report launchReport, release string) {
 func (s *LaunchSuite) TestDirectHandoffSurvivesCancellationAndReaps() {
 	entry, environment, path, release := s.fixture()
 	ctx, cancel := context.WithCancel(context.Background())
-	s.Require().NoError(Launch(ctx, entry, environment))
+	s.Require().NoError(launchExec(ctx, entry, environment))
 	cancel()
 	report := s.capture(path)
 	s.Equal([]string{"-test.run=TestDesktopLaunchHelper", "--", "two words", "", "Имя %i"}, report.Args)
@@ -141,7 +143,7 @@ func (s *LaunchSuite) TestDirectHandoffSurvivesCancellationAndReaps() {
 func (s *LaunchSuite) TestTerminalCLIAndWorkingDirectory() {
 	entry, environment, path, release := s.fixture()
 	entry.Terminal = true
-	s.Require().NoError(Launch(context.Background(), entry, environment))
+	s.Require().NoError(launchExec(context.Background(), entry, environment))
 	report := s.capture(path)
 	s.Equal([]string{
 		"--dir=" + entry.Path, "--", filepath.Join(entry.Path, "app"),
@@ -155,19 +157,19 @@ func (s *LaunchSuite) TestStartFailuresAndDispatchBoundary() {
 	entry, environment, path, _ := s.fixture()
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	s.ErrorIs(Launch(ctx, entry, environment), context.Canceled)
+	s.ErrorIs(launchExec(ctx, entry, environment), context.Canceled)
 	entry.DBusActivatable = true
-	s.ErrorContains(Launch(context.Background(), entry, environment), "D-Bus")
+	s.ErrorContains(launchExec(context.Background(), entry, environment), "D-Bus")
 	entry.DBusActivatable = false
 	entry.Path = filepath.Join(entry.Path, "missing")
-	s.ErrorContains(Launch(context.Background(), entry, environment), "cannot start")
+	s.ErrorContains(launchExec(context.Background(), entry, environment), "cannot start")
 	entry.Path = filepath.Dir(path)
 	entry.Exec.Decoded = "missing"
-	s.ErrorContains(Launch(context.Background(), entry, environment), "cannot find executable")
+	s.ErrorContains(launchExec(context.Background(), entry, environment), "cannot find executable")
 	entry.Exec.Decoded = "app"
 	entry.Terminal = true
 	s.Require().NoError(os.Remove(filepath.Join(entry.Path, "xdg-terminal-exec")))
-	s.ErrorContains(Launch(context.Background(), entry, environment), "install xdg-terminal-exec")
+	s.ErrorContains(launchExec(context.Background(), entry, environment), "install xdg-terminal-exec")
 	_, err := os.Stat(path)
 	s.True(os.IsNotExist(err))
 }
@@ -179,9 +181,9 @@ func (s *LaunchSuite) TestRelativePATHNeverFindsCurrentDirectory() {
 			environment[index] = "PATH=:.:relative"
 		}
 	}
-	s.ErrorContains(Launch(context.Background(), entry, environment), "cannot find executable")
+	s.ErrorContains(launchExec(context.Background(), entry, environment), "cannot find executable")
 	entry.Exec.Decoded = "./app"
-	s.ErrorContains(Launch(context.Background(), entry, environment), "cannot find executable")
+	s.ErrorContains(launchExec(context.Background(), entry, environment), "cannot find executable")
 }
 
 func (s *LaunchSuite) TestApplicationSurvivesLauncherExit() {
@@ -191,7 +193,7 @@ func (s *LaunchSuite) TestApplicationSurvivesLauncherExit() {
 			environment[index] = "RUNIX_LAUNCH_HELPER=parent"
 		}
 	}
-	s.Require().NoError(Launch(context.Background(), entry, environment))
+	s.Require().NoError(launchExec(context.Background(), entry, environment))
 	report := s.capture(path)
 	var parentPID string
 	s.Require().Eventually(func() bool {
